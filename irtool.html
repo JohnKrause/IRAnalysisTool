@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+		<meta charset="UTF-8">
+		<meta http-equiv="X-UA-Compatible" content="IE=edge">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Thermal Image Analysis</title>
+		<link rel="stylesheet" href="styles.css">
+		<style>
+	* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+	}
+
+		body, html {
+			font-family: Arial, sans-serif;
+			background-color: #555;
+			padding: 0px;
+			height: 100vh;
+			overflow: hidden;
+	}
+
+	.title-container {
+		width: auto;
+		height: auto;
+		margin: 20px;
+			background-color: rgba(0,0,0,0);
+	}
+	.title-container h1 {
+		margin: 0px;
+		text-align: left;
+	}
+
+	.main-container {
+			margin: 0;
+				height: 100vh;
+				display: flex;
+				justify-content: center;
+	}
+
+	.app-container {
+		width: auto;
+		height: auto;
+		margin-top: 0px;
+		margin-bottom: auto;
+		background-color: rgba(25,200,255,0.1);
+			box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
+
+			display: grid;
+			grid-gap: 5px;
+			padding: 5px;
+			grid-template-rows: auto 200px;
+			grid-template-columns: auto 300px;
+	}
+
+	.base-viewcanvas-container {
+		grid-column-start: 1;
+		grid-column-end: 2;
+		grid-row-start: 1;
+		grid-row-end: 2;
+
+		min-height: 360px;
+		min-width: 480px;
+		position: relative;
+		display: flex;
+			justify-content: center;
+			align-items: center;
+
+	}
+	.base-graphcanvas-container {
+		grid-column-start: 1;
+		grid-column-end: 3;
+		grid-row-start: 2;
+		grid-row-end: 3;
+	}
+	.base-toolbar-container {
+		grid-column-start: 2;
+		grid-column-end: 3;
+		grid-row-start: 1;
+		grid-row-end: 2;
+	}
+
+	.viewcanvas {
+		position: absolute;
+	}
+	.viewcanvas:hover {
+		cursor: crosshair;
+	}
+
+	.graphcanvas {
+		position: inherit;
+	}
+
+		</style>
+</head>
+
+<body onload="startup()">
+	<div class="title-container">
+		<h1>Thermal Image Analysis</h1>
+	</div>
+	<div id="main_container" class="main-container">
+		<div class="app-container">
+					<div class="base-toolbar-container">
+						<h2>Tools</h2>
+				<input type="button" id="loadButton" value="Choose File" onclick="document.getElementById('fileInput').click();" />
+				<input type="file" style="display:none;" id="fileInput" name="file" onchange="handleFileUpload()"/>
+				<br>
+						<button onclick="activatePointerTool()">Pointer</button>
+						<button onclick="tool2()">Tool 2</button>
+						<button onclick="tool3()">Tool 3</button>
+					</div>
+					<div class="base-viewcanvas-container">
+						<canvas id="thermal_canvas" class="viewcanvas"></canvas>
+						<canvas id="tool_canvas" class="viewcanvas"></canvas>
+					</div>
+					<div class="base-graphcanvas-container">
+						<div id="pointer_graph" class="tool-graph">
+							<canvas id="pointer_histogram" class="graphcanvas"></canvas>
+						</div>
+					</div>
+		</div>
+	</div>
+
+<script>
+	//top level functions and control
+	var thermalCanvas = null;
+	var windowWidth = 0;
+	var windowHeight = 0;
+	var irImageController = null;
+
+	function startup()
+	{
+		console.log("startup")
+	}
+
+	function handleFileUpload()
+	{
+			const fileInput = document.getElementById('fileInput');
+			const file = fileInput.files[0];
+			if (!file) { console.log("No file selected."); }
+			irImageController = 
+					new IrImageController(file,"","","");
+			return;
+	}
+
+	function activatePointerTool() {
+		toolManager.changeTool(toolPointer);
+	}
+
+	function newTemperatureData()
+	{
+		thermalCanvas.updateCanvas();
+		toolManager.updateCanvas();
+	}
+
+	function resizeCanvas()
+	{
+		windowWidth=document.getElementById('main_container').offsetWidth-300;
+		windowHeight=document.getElementById('main_container').offsetHeight-250;
+		thermalCanvas.resizeCanvas();
+		toolManager.resizeCanvas();
+	}
+</script>
+
+<script>
+	class IrImageController {
+		constructor(irFile, irCanvasId, toolCanvasId, toolDivId) {
+			this.irThermalArrayModel = new IrThermalArrayModel();
+			this.irThermalArrayModel.parseFile(irFile);
+
+			//this.irThermalImageView = new IrThermalImageView(irCanvasId)
+			
+			//this.toolOverlayView = new ToolOverlayView(toolCanvasId);
+			//this.toolAnalysisView = new ToolAnalysisView(toolDivId);
+
+			//this.activeToolModel = null;
+			//this.loadedToolModels = {};
+			//this.setToolModel(ToolPointerModel);
+		}
+
+		setToolModel(toolModel) {
+			const toolName = toolModel.getName();
+
+			if(this.activeToolModel) this.activeToolModel.deactivate();
+			
+			if(!this.loadedToolModels.hasOwnProperty(toolName)) {
+				this.loadedToolModels[toolName] = 
+							new toolModel(this.irThermalArrayModel);
+			}
+
+			this.activeToolModel=this.loadedToolModels[toolName];
+			this.activeToolModel.activate();
+			this.redrawToolViews();
+		}
+
+		redrawThermalImage() {
+			this.irThermalImageView.redrawThermalImage();
+		}
+
+		redrawToolViews() {
+			const currentToolOverlay = this.activeToolModel.getOverlay();
+			this.toolOverlayView.update(currentToolOverlay);
+			const currentToolAnalysis = this.activeToolModel.getAnalysis();
+			this.toolAnalysisView.update(currentToolAnalysis);
+		}
+	}
+
+
+	
+</script>
+
+<script>
+</script>
+
+<script>
+
+</script>
+
+<script>
+class ColorPalette {
+}
+
+</script>
+<script>
+class IrThermalArrayModel {
+
+	constructor() {
+		console.log("make array model");
+		this.displayUnits='c';
+		this.thermalArray=[];
+		this.irThermalImageModel = new IrThermalImageModel();
+	}
+
+	parseFile(irFile) {
+		this.irThermalImageModel.loadFile(irFile).then(() => {
+			return this.createTemperatureArray();
+		}).catch((error) => {
+			console.error(error);
+		});
+		return false;
+	}
+
+	createTemperatureArray() {
+		const rawData=this.irThermalImageModel.dataFLIR.rawData;
+		const cameraData=this.irThermalImageModel.dataFLIR.cameraData;
+		if(!rawData || !cameraData) {
+			console.error("Did not find raw data or camera data");
+			return false;
+		}
+		this.thermalArray=[];
+		if(rawData['ThermalImage'].length < 
+				(rawData['ImageHeight'] * rawData['ImageWidth'])) {
+			throw "ThermalImage has wrong length (not Height * Width)"
+		}
+		this.arrayRendered=false;
+		const e = Math.E;
+			const R1 = cameraData[ 'PlanckR1'];
+			const R2 = cameraData[ 'PlanckR2'];
+			const B = cameraData[ 'PlanckB'];
+			const F = cameraData[ 'PlanckF'];
+			const O = cameraData[ 'PlanckO'];
+			const T_refl = cameraData[ 'ReflectedApparentTemperature'];
+			const Emissivity = cameraData[ 'Emissivity'];
+
+		for (let h=0; h<rawData['ImageHeight']; h++) {
+			let row=[];
+			let rowOffset = h*rawData['ImageWidth'];
+			for (let w=0; w<rawData['ImageWidth']; w++) {
+					const S = rawData['ThermalImage'][rowOffset+w];
+					const RAW_refl = R1 / (R2 * (Math.pow(e, B/T_refl) - F)) - O;
+					const RAW_obj = (S - (1 - Emissivity) * RAW_refl) / Emissivity;
+					const T_obj = B / Math.log(R1 / (R2 * (RAW_obj + O)) + F);
+					row.push(T_obj);
+			}
+			this.thermalArray.push(row)
+		}
+		return true;
+	}
+}
+
+class IrThermalImageModel {
+	constructor() {
+		this.byteArray=null;
+		this.segmentList=[];
+		this.bytesFLIR=[];
+		this.headerFLIR={};
+		this.recordsFLIR={};
+		this.dataFLIR={};
+	}
+
+	loadFile(irFile) {
+		return new Promise((resolve, reject) => {
+			var fileReader = new FileReader();
+
+			fileReader.onloadend = () => {
+				if (fileReader.result) {
+					this.byteArray = new Uint8Array(fileReader.result);
+					this.parseFile();
+					resolve();
+				}
+			};
+
+			fileReader.onerror = (error) => {
+				reject(new Error(error));
+			}
+
+			fileReader.readAsArrayBuffer(irFile);
+		});
+	}
+
+	parseFile() {
+		console.log("find segments");
+		this.findSegments();
+		console.log(this.segmentList)
+		console.log("extract FLIR segments");
+		this.extractFLIRSegments();
+		console.log(this.bytesFLIR)
+		console.log("process FLIR header");
+		this.processFLIRHeader();
+		console.log(this.headerFLIR);
+		console.log("process FLIR records");
+		this.processFLIRRecords();
+		console.log(this.recordsFLIR)
+		console.log("process Raw Data");
+		this.processRawData();
+		console.log("process Camera Data");
+		this.processCameraData();
+		console.log(this.dataFLIR)
+	}
+
+	findSegments() {
+		let i = 0;
+		let found_exif = false;
+		this.segmentList=[];
+		//check that it's a valid jpeg (starts with 0xD8FF)
+		if (this.byteArray[i] !== 0xFF || this.byteArray[i + 1] !== 0xD8) {
+			throw "Not a valid JPEG file";
+		}
+		i += 2;
+		//create list of all jpeg segments 
+		//	(segments starts with 0xFFyy where yy isn't 0x00)
+		//the list is like [[segment id, segment start index,segment length]]
+		while (i < this.byteArray.length) {
+			if(this.byteArray[i] == 0xFF){
+				if(this.byteArray[i+1] != 0x00){
+					let segment_info=[];
+					let segment_id = this.byteArray[i + 1];
+					if(segment_id==225) {
+						found_exif=true;
+					}
+					let segment_start = i+2;
+					let segment_length = 0;
+					segment_info.push(segment_id);
+					segment_info.push(segment_start)
+					segment_length = (this.byteArray[segment_start] << 8) + 
+							this.byteArray[segment_start+1];
+					if(this.byteArray[segment_start+segment_length]==0xFF && 
+							this.byteArray[segment_start+segment_length+1]!=0x00) {
+						segment_info.push(segment_length);
+						i = segment_start+segment_length;
+					} else {
+						segment_info.push(0);
+						i+=2;
+					}
+					this.segmentList.push(segment_info);
+				} else{i+=2;}
+			} else{i+=1;}
+		}
+		if(!this.segmentList) {throw "Found no segments"}
+		if(!found_exif) {throw "Found no EXIF segments"}
+	}
+
+	extractFLIRSegments() {
+		//compile segments into flir data
+		this.bytesFLIR = new Uint8Array([]);
+		for(const segment_info of this.segmentList) {
+			if(segment_info[0]==225 && segment_info[2]>=0x40) //check if exif segment and large enough for data
+			{	
+				//prepare to slice up start of segment for identification
+				let segment_size_start=segment_info[1];
+				let segment_type_start=segment_size_start+2;
+				let segment_contents_start=segment_type_start+8; //flir records have 8 bytes of id at beginning
+				let segment_size_bytes=segment_info[2];
+				let segment_contents_size=segment_size_bytes-(2+8); //excluding 2 byte segment size and 8 byte id
+				//Slice up array and determine if FLIR type
+				let segment_type_bytes = this.byteArray.slice(segment_type_start, segment_type_start+6);
+				let segment_type=""
+				for(let i=0; i<6; i++){
+					segment_type+=String.fromCharCode(segment_type_bytes[i]);
+				}
+				//Check that the segment tag is correct
+				if(segment_type.startsWith("FLIR")){
+					//combine this segment with previous flir segments
+					let segment_contents_bytes=this.byteArray.slice(segment_contents_start, segment_contents_start+segment_contents_size);
+					this.bytesFLIR = concatenateUint8Arrays(this.bytesFLIR, segment_contents_bytes);
+				}
+			}
+		}
+		if(!this.bytesFLIR) {
+			throw "Found no FLIR segments"
+		}
+	}
+
+	processFLIRHeader() 
+	{
+		if(this.bytesFLIR.length<0x40) {
+			throw "FLIR segment is too small"
+		}
+		let header_bytes=this.bytesFLIR.slice(0, 0x40);
+		if(String.fromCharCode(header_bytes[0])=="F" || 
+				String.fromCharCode(header_bytes[0])=="A")
+		{
+			if(String.fromCharCode(header_bytes[1])=="F" 
+				&& String.fromCharCode(header_bytes[2])=="F"
+				&& header_bytes[3]==0)
+			{
+				this.headerFLIR={};
+				this.headerFLIR['Creator']=getstring(header_bytes,0x04,16);
+				this.headerFLIR['Version']=get32u(header_bytes,0x14);
+				this.headerFLIR['RecordOffset']=get32u(header_bytes,0x18);
+				this.headerFLIR['NumRecords']=get32u(header_bytes,0x1c);
+				this.headerFLIR['NextIndex']=get32u(header_bytes,0x20);
+				this.headerFLIR['SwapPattern']=get16u(header_bytes,0x24);
+				this.headerFLIR['Spares']=get16u_array(header_bytes,0x28, 7);
+				this.headerFLIR['Reserved']=get32u_array(header_bytes,0x34, 2);
+				this.headerFLIR['Checksum']=get32u(header_bytes,0x3c);
+				return;
+			}
+		}
+		throw "FLIR header has invalid start code"
+	}
+
+	processFLIRRecords()
+	{
+		if(this.headerFLIR['NumRecords']>255) {
+			throw "Number of records is invalid";
+		}
+		let records_start_index = this.headerFLIR['RecordOffset'];
+		let records_end_index = records_start_index+
+				(0x20 * this.headerFLIR['NumRecords']);
+		if(records_end_index > this.bytesFLIR.length) {
+			throw "FLIR records extend past end of records";
+		}
+		//Extract the record header sections
+		this.bytesRecords=this.bytesFLIR.slice(records_start_index, records_end_index);
+		//Extract information for each record
+		this.recordsFLIR={}
+		for(let i=0; i<this.headerFLIR['NumRecords']; ++i)
+		{
+			let record={}
+			let record_start=i*0x20;
+			record['Type']=get16u(this.bytesRecords,record_start+0x00);
+			record['SubType']=get16u(this.bytesRecords,record_start+0x02);
+			record['Version']=get32u(this.bytesRecords,record_start+0x04);
+			record['IndexID']=get32u(this.bytesRecords,record_start+0x08);
+			record['RecordOffset']=get32u(this.bytesRecords,record_start+0x0c);
+			record['RecordLength']=get32u(this.bytesRecords,record_start+0x10);
+			record['Parent']=get32u(this.bytesRecords,record_start+0x14);
+			record['ObjectNumber']=get32u(this.bytesRecords,record_start+0x18);
+			record['Checksum']=get32u(this.bytesRecords,record_start+0x1c);
+			if(record['Type']==0) {
+				continue;
+			}
+			else {
+				this.recordsFLIR[record['Type']]=record;
+			}
+		}
+	}
+
+	processRawData()
+	{
+		if(!this.recordsFLIR.hasOwnProperty(0x01)) {
+			throw "FLIR records missing key for raw data";
+		}
+		let reverse=false;
+		let record=this.recordsFLIR[0x01];
+		this.dataFLIR["rawData"]={};
+		let raw_data={};
+		raw_data['ByteOrder'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x00);
+		if(raw_data['ByteOrder']>0x0100) {
+			reverse=true;
+		}
+		raw_data['ByteOrder'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x00, reverse);
+		raw_data['ImageWidth'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x02, reverse);
+		raw_data['ImageHeight'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x04, reverse);
+		raw_data['ThermalImage'] = 
+		get16u_array(this.bytesFLIR, record['RecordOffset']+0x1E+2, 
+				raw_data['ImageWidth']*raw_data['ImageHeight'], reverse)
+		this.dataFLIR["rawData"] = raw_data;
+	}
+
+	processCameraData()
+	{
+		if(!this.recordsFLIR.hasOwnProperty(0x20)) {
+			throw "FLIR records missing key for camera data";
+		}
+		let reverse=false;
+		let record=this.recordsFLIR[0x20];
+		this.dataFLIR["cameraData"]={};
+		let camera_data={};
+		camera_data['ByteOrder'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x00);
+		if(camera_data['ByteOrder']>0x0100) {
+			reverse=true;
+		}
+		camera_data[ 'ByteOrder'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x00, reverse);
+		camera_data[ 'Emissivity'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x20, reverse);
+		camera_data[ 'ObjectDistance'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x24, reverse);
+		camera_data[ 'ReflectedApparentTemperature'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x28, reverse);
+		camera_data[ 'AtmosphericTemperature'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x2c, reverse);
+		camera_data[ 'IRWindowTemperature'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x30, reverse);
+		camera_data[ 'IRWindowTransmission'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x34, reverse);
+		camera_data[ 'RelativeHumidity'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x3c, reverse);
+		camera_data[ 'PlanckR1'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x58, reverse);
+		camera_data[ 'PlanckB'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x5c, reverse);
+		camera_data[ 'PlanckF'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x60, reverse);
+		camera_data[ 'AtmosphericTransAlpha1'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x070, reverse);
+		camera_data[ 'AtmosphericTransAlpha2'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x074, reverse);
+		camera_data[ 'AtmosphericTransBeta1'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x078, reverse);
+		camera_data[ 'AtmosphericTransBeta2'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x07c, reverse);
+		camera_data[ 'AtmosphericTransX'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x080, reverse);
+		camera_data[ 'CameraTemperatureRangeMax'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x90, reverse);
+		camera_data[ 'CameraTemperatureRangeMin'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x94, reverse);   
+		camera_data[ 'CameraTemperatureMaxClip'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x98, reverse);  
+		camera_data[ 'CameraTemperatureMinClip'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x9c, reverse);
+		camera_data[ 'CameraTemperatureMaxWarn'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0xa0, reverse);
+		camera_data[ 'CameraTemperatureMinWarn'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0xa4, reverse);
+		camera_data[ 'CameraTemperatureMaxSaturated'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0xa8, reverse);
+		camera_data[ 'CameraTemperatureMinSaturated'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0xac, reverse);  
+		camera_data[ 'CameraModel'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0xd4, 32);
+		camera_data[ 'CameraPartNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0xf4, 16, reverse);
+		camera_data[ 'CameraSerialNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x104, 16, reverse);
+		camera_data[ 'CameraSoftware'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x114, 16, reverse);
+		camera_data[ 'LensModel'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x170, 32, reverse);
+		camera_data[ 'LensPartNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x190, 16, reverse);
+		camera_data[ 'LensSerialNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x1a0, 16, reverse);
+		camera_data[ 'FieldOfView'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x1b4, reverse);
+		camera_data[ 'FilterModel'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x1ec, 16, reverse);
+		camera_data[ 'FilterPartNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x1fc, 32, reverse);
+		camera_data[ 'FilterSerialNumber'] = 
+		getstring(this.bytesFLIR, record['RecordOffset']+0x21c, 32, reverse);
+		camera_data[ 'PlanckO'] = 
+		get32s(this.bytesFLIR, record['RecordOffset']+0x308, reverse);
+		camera_data[ 'PlanckR2'] = 
+		get32float(this.bytesFLIR, record['RecordOffset']+0x30c, reverse);
+		camera_data[ 'RawValueRangeMin'] = 
+		get16u(this.bytesFLIR, record['RecordOffset']+0x310, reverse);
+		this.dataFLIR["cameraData"] = camera_data;
+	}
+}
+
+function get32float(array, offset, reverse=false) 
+{
+		const buffer = new ArrayBuffer(8);
+		const view = new DataView(buffer);
+		if(reverse) {
+			view.setUint8(3,array[offset+0]);
+			view.setUint8(2,array[offset+1]);
+			view.setUint8(1,array[offset+2]);
+			view.setUint8(0,array[offset+3]);
+		} else {
+			view.setUint8(0,array[offset]);
+			view.setUint8(1,array[offset+1]);
+			view.setUint8(2,array[offset+2]);
+			view.setUint8(3,array[offset+3]);
+		}    
+		return view.getFloat32(0);
+}
+
+function get32u(array, offset, reverse=false)
+{
+	if(reverse) {
+		return array[offset+3]<<24 | array[offset+2]<<16 | 
+				array[offset+1]<<8 | array[offset]<<0;
+	}
+	return array[offset]<<24 | array[offset+1]<<16 | 
+			array[offset+2]<<8 | array[offset+3]<<0;
+}
+
+function get32s(array, offset, reverse=false)
+{
+	//TODO
+	//apparently get32u will return negative values already?
+	return get32u(array, offset, reverse);
+}
+
+function get32u_array(array, offset, len, reverse=false)
+{
+	let array_32u=[];
+	for(let i=0; i<len; i++) {
+		array_32u.push(get32u(array, offset+(4*i), reverse));
+	}
+	return array_32u;
+}
+
+function get16u(array, offset,reverse=false)
+{
+	if(reverse) {
+		return array[offset+1]<<8 | array[offset]<<0;
+	}
+	return array[offset]<<8 | array[offset+1]<<0;
+}
+
+function get16u_array(array, offset, len, reverse=false)
+{
+	let array_16u=[];
+	for(let i=0; i<len; i++) {
+		array_16u.push(get16u(array, offset+(2*i), reverse));
+	}
+	return array_16u;
+}
+
+function getstring(array, offset, len, reverse=false)
+{
+	let string="";
+	for(let i=0; i<len; i++) {
+		string+=String.fromCharCode(array[offset+i]);
+	}
+	return string;
+}
+
+function concatenateUint8Arrays(...arrays) 
+{
+		let totalLength = 0;
+		for (let arr of arrays) {
+				totalLength += arr.length;
+		}
+		let result = new Uint8Array(totalLength);
+		let offset = 0;
+		for (let arr of arrays) {
+				result.set(arr, offset);
+				offset += arr.length;
+		}
+		
+		return result;
+}
+</script>
+
+<script>
+
+</script>
+</body>
+</html>
+
+
+
+

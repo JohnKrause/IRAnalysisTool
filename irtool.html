@@ -243,25 +243,52 @@ class pointerTool extends analysisTool{
 		this.thermalArray=null;
 		this.analytics={minTemp:{},maxTemp:{},x:0,y:0,tArray:[],boxW:0,boxH:0};
 	}
-	needsRedraw() {;}
-	mouseWheel(deltaX, deltaY) {;}
-	mouseUp() {;}
-	mouseDown() {;}
+	needsRedraw() {
+		return this.redraw;
+	}
+	mouseWheel(deltaX, deltaY) {
+		if(deltaY < 0) {
+			this.boxWidth+=1;
+			this.boxHeight+=1;
+			this.calculateAnalytics();
+		}
+		else if(deltaY > 0 && this.boxWidth>3) {
+			this.boxWidth-=1;
+			this.boxHeight-=1;
+			this.calculateAnalytics();
+		}
+	}
+	mouseUp() {
+		this.dragging=false;
+	}
+	mouseDown() {
+		this.dragging=true;
+	}
 	mouseIn() {;}
-	mouseOut() {;}
-	mouseMove(arrayX, arrayY) {;}
+	mouseOut() {
+		this.dragging=false;
+	}
+	mouseMove(arrayX, arrayY) {
+		if(this.dragging) {
+			if(this.mouseX!=arrayX || this.mouseY!=arrayY)
+			{
+				this.mouseX=arrayX;
+				this.mouseY=arrayY;
+				this.getCursorAnalytics();
+			}
+		}
+	}
 	setArray(thermalArray) {
-		this.redraw=true;
 		this.thermalArray=thermalArray;
 		this.calculateAnalytics();
 	}
 	calculateAnalytics() {
+		this.redraw=true;
 		if(this.mouseX===null || this.mouseY===null) {
 			this.mouseY=Math.Floor(this.thermalArray.length/2);
 			this.mouseX=Math.Floor(this.thermalArray[0].length/2);
-			this.getCursorAnalytics();
 		}
-
+		this.getCursorAnalytics();
 	}
 	getCursorAnalytics() {
 		const x0 = this.mouseX-this.boxWidth;
@@ -303,8 +330,46 @@ class pointerTool extends analysisTool{
 		this.analytics.boxH=this.boxHeight;
 		this.analytics.x=this.mouseX;
 		this.analytics.y=this.mouseY;
+		this.analytics.thermalArray = this.thermalArray;
 	}
-	drawCursor(toolCanvas){;}
+	drawCursor(toolCanvas){
+			const arrayHeight = this.analytics.thermalArray.length;
+			const arrayWidth = this.analytics.thermalArray[0].length;
+			const canvasHeight = toolCanvas.height;
+			const canvasWidth = toolCanvas.width;
+			const toolCanvasCtx = toolCanvas.getContext('2d');
+			const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
+			const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
+			toolCanvasCtx.strokeStyle='black';
+			toolCanvasCtx.lineWidth=3;
+			toolCanvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
+			toolCanvasCtx.strokeRect(
+				((pixelInfo.x-this.boxWidth)*canvasInfo.scale)-1, 
+				((pixelInfo.y-this.boxHeight)*canvasInfo.scale)-1, 
+				(((2*this.boxWidth) +1)*canvasInfo.scale)+3, 
+				(((2*this.boxHeight) +1)*canvasInfo.scale)+3);
+			toolCanvasCtx.lineWidth=1;
+			toolCanvasCtx.strokeRect(
+				(pixelInfo.x*canvasInfo.scale), 
+				(pixelInfo.y*canvasInfo.scale), 
+				(canvasInfo.scale)+1, 
+				(canvasInfo.scale)+1);
+			toolCanvasCtx.strokeStyle='blue';
+			toolCanvasCtx.lineWidth=2;
+			toolCanvasCtx.strokeRect(
+				((this.minTemp.x)*canvasInfo.scale), 
+				((this.minTemp.y)*canvasInfo.scale), 
+				(canvasInfo.scale)+1, 
+				(canvasInfo.scale)+1);
+			toolCanvasCtx.strokeStyle='red';
+			toolCanvasCtx.lineWidth=2;
+			toolCanvasCtx.strokeRect(
+				((this.maxTemp.x)*canvasInfo.scale), 
+				((this.maxTemp.y)*canvasInfo.scale), 
+				(canvasInfo.scale)+1, 
+				(canvasInfo.scale)+1);
+	}
+
 	drawGraph(graphCanvas){;}
 	drawAnalytics(analyticsDiv){;}
 }

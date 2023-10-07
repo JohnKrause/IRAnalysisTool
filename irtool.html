@@ -71,7 +71,9 @@
 		height: 80%;
 		width: auto;
 	}
-
+	.thermalcanvas-size-container{
+		position: relative;
+	}
 	.measurements-container{
 		margin: 0px;
 		height: 20%;
@@ -79,142 +81,197 @@
 	}
 
 	.thermalcanvas-element {
+		position: absolute;
+		top:0;
+		left:0;
+		width: 100%;
+		height: 100%;
 		border: solid;
 	}
 	.thermalcanvas-element:hover {
 		cursor: crosshair;
 	}
+
+	.toolCanvas {
+		z-index:2;
+	}
+
+	.thermalCanvas {
+		z-index:1;
+	}
 </style>
 
 <script>
-//top level functions and control
-let thermalCanvas = null;
-let windowWidth = 0;
-let windowHeight = 0;
-let irAnalysisController = null;
-let colorPalette = null;
-let loadedTools = {};
-let loadedFiles = {};
-
-
-function startup() {
-	console.log("startup")
-	irAnalysisController = new IrAnalysisController("id_thermalCanvas","");
-	colorPalette = new ViridisPalette();
-	irAnalysisController.setActiveColorPaletteModel(colorPalette);
-	window.addEventListener('resize', resizeWindow);
-}
-
-function handleFileUpload() {
-	const fileInput = document.getElementById('fileInput');
-	const irFile = fileInput.files[0];
-	if (!irFile) { 
-		console.log("No file selected.");
-	} else {
-		const irThermalArrayModel = new IrThermalArrayModel();
-		irThermalArrayModel.parseFile(irFile).then(() => {
-			loadedFiles['1']={};
-			loadedFiles['1'].irThermalArrayModel = irThermalArrayModel;
-			loadedFiles['1'].file = irFile;;
-			irAnalysisController.setActiveThermalArray(irThermalArrayModel);
-			setCanvasSize();
-		});
-	}
-	return;
-}
-
-function activatePointerTool() {
-	toolManager.changeTool(toolPointer);
-}
-
-function newTemperatureData() {
-	thermalCanvas.updateCanvas();
-	toolManager.updateCanvas();
-}
-
-function setCanvasSize() {
-	availableWidth=document.getElementById('id_thermalCanvasContainer')
-			.offsetWidth;
-	availableHeight=document.getElementById('id_thermalCanvasContainer')
-			.offsetHeight;
-	irAnalysisController.setAvailableSize(availableWidth,availableHeight);
-}
-
-function resizeWindow() {
-	setCanvasSize();
-}
 
 class IrAnalysisController {
-	constructor(irCanvasId, toolCanvasId, toolDivId) {
+	constructor(canvasDivId, irCanvasId, toolCanvasId, toolDivId) {
+		this.canvasDiv = document.getElementById(canvasDivId);
 		this.thermalCanvas = document.getElementById(irCanvasId);
-		this.thermalCanvasIrBuffer = document.createElement('canvas');
-		this.thermalCanvasIrBuffer.width = this.thermalCanvas.width;
-		this.thermalCanvasIrBuffer.height = this.thermalCanvas.height;
-		this.thermalCanvasToolBuffer = document.createElement('canvas');
-		this.thermalCanvasToolBuffer.width = this.thermalCanvas.width;
-		this.thermalCanvasToolBuffer.height = this.thermalCanvas.height;
+		this.toolCanvas = document.getElementById(toolCanvasId);
 
 		this.irThermalArrayView = new IrThermalArrayView();
+		this.irThermalArrayView.setCanvas(this.thermalCanvas);
 		this.activeThermalArrayModel = null;
+
+		this.irThermalArrayView_redraw=true;
+		this.activeTool_redraw=true;
 		
 		//this.toolOverlayView = new ToolOverlayView(toolCanvasId);
 		//this.toolAnalysisView = new ToolAnalysisView(toolDivId);
 
-		//this.activeToolModel = null;
+		this.activeToolModel = null;
 		//this.loadedToolModels = {};
 		//this.setToolModel(ToolPointerModel);
+		this.canvasDiv.addEventListener('wheel',this.mouseWheel.bind(this));
+		this.canvasDiv.addEventListener('mouseup',this.mouseUp.bind(this));
+		this.canvasDiv.addEventListener('mousedown',this.mouseDown.bind(this));
+		this.canvasDiv.addEventListener('mousein',this.mouseIn.bind(this));
+		this.canvasDiv.addEventListener('mouseout',this.mouseOut.bind(this));
+		this.canvasDiv.addEventListener('mousemove',this.mouseMove.bind(this));
+		this.canvasDiv.addEventListener('keydown',this.keyboard.bind(this));
 	}
 
-	setActiveToolModel(activeToolModel) {
-
+	setActiveToolModel(toolModel) {
+		this.activeToolModel=toolModel;
+		this.activeToolModel.setCanvas(this.toolCanvas);
+		this.updateToolArray();
+		this.redrawAll();
 	}
 
 	setActiveThermalArray(targetThermalArrayModel) {
 		this.activeThermalArrayModel = targetThermalArrayModel;
-		this.redrawCanvas();
+		this.updateToolArray();
+		this.updateThermalCanvasArray();
+		this.redrawAll();
 	}
 
 	setActiveColorPaletteModel(targetColorPaletteModel) {
 		this.irThermalArrayView.setActiveColorPaletteModel(targetColorPaletteModel);
-		this.redrawCanvas();
+		this.irThermalArrayView_redraw=true;
+		this.redrawAll();
 	}
 
 	setAvailableSize(availableWidth, availableHeight) {
-		const thermalArray = this.activeThermalArrayModel.getThermalArray();
-		const arrayHeight = thermalArray.length;
-		const arrayWidth = thermalArray[0].length;
-		const newHeight = Math.floor(availableHeight/arrayHeight)*arrayHeight;
-		const newWidth = Math.floor(availableWidth/arrayWidth)*arrayWidth;
-		if(newWidth!=this.thermalCanvas.width || 
-				newHeight!=this.thermalCanvas.height) {
-			this.thermalCanvas.width=newWidth;
-			this.thermalCanvas.height=newHeight;
-			this.thermalCanvasIrBuffer.width=newWidth;
-			this.thermalCanvasIrBuffer.height=newHeight;
-			this.thermalCanvasToolBuffer.width=newWidth;
-			this.thermalCanvasToolBuffer.height=newHeight;
-			this.redrawCanvas();
+		if(this.activeThermalArrayModel) {
+			const thermalArray = this.activeThermalArrayModel.getThermalArray();
+			const arrayHeight = thermalArray.length;
+			const arrayWidth = thermalArray[0].length;
+			const newHeight = Math.floor(availableHeight/arrayHeight)*arrayHeight;
+			const newWidth = Math.floor(availableWidth/arrayWidth)*arrayWidth;
+			if(newWidth!=this.toolCanvas.width || 
+					newHeight!=this.toolCanvas.height) {
+				this.canvasDiv.style.width=newWidth+'px';
+				this.canvasDiv.style.height=newHeight+'px';
+				this.thermalCanvas.width=newWidth;
+				this.thermalCanvas.height=newHeight;
+				this.toolCanvas.width=newWidth;
+				this.toolCanvas.height=newHeight;
+				this.irThermalArrayView_redraw=true;
+				this.activeTool_redraw=true;
+				this.redrawAll();
+			}
 		}
 	}
 
-	redrawCanvas() {
-		try {
+	redrawAll() {
+		if(this.activeThermalArrayModel) {
+			let redraw = false;
+			if(this.activeToolModel && this.activeTool_redraw) {
+				this.drawTool();
+				redraw=true;
+			}
+			if(this.irThermalArrayView_redraw) {
+				this.updateThermalCanvasArray();
+				this.drawThermalCanvas();
+				redraw=true;
+			}
+		}
+	}
+
+	updateToolArray() {
+		if(this.activeThermalArrayModel && this.activeToolModel) {
 			const thermalArray = this.activeThermalArrayModel.getThermalArray();
-			this.irThermalArrayView.drawThermalArray(thermalArray, this.thermalCanvas);
-			} catch (error) {
-				console.log(`Could not draw thermalCanvas: ${error}`);
+			this.activeToolModel.setArray(thermalArray);
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+		}
+	}
+
+	updateThermalCanvasArray() {
+		if(this.activeThermalArrayModel && this.irThermalArrayView) {
+			const thermalArray = this.activeThermalArrayModel.getThermalArray();
+			this.irThermalArrayView.setThermalArray(thermalArray);
+			this.irThermalArrayView_redraw=true;
 		}
 	}
 
 	drawTool() {
-		const currentToolOverlay = this.activeToolModel.getOverlay();
-		this.toolOverlayView.update(currentToolOverlay);
-		const currentToolAnalysis = this.activeToolModel.getAnalysis();
-		this.toolAnalysisView.update(currentToolAnalysis);
+		try {
+			this.activeToolModel.drawCursor();
+		} catch (error) {
+			console.log(`Could not draw Tool: ${error}`);
+		}
+	}
+
+	drawThermalCanvas() {
+		try {
+			this.irThermalArrayView.drawThermalArray(this.thermalCanvasIrBuffer);
+		} catch (error) {
+			console.log(`Could not draw thermalCanvas: ${error}`);
+		}
+	}
+
+	mouseWheel(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseWheel(event.deltaX, event.deltaY);
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	mouseUp(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseUp();
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	mouseDown(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseDown();
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	mouseIn(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseIn();
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	mouseOut(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseOut();
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	mouseMove(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.mouseMove(event.offsetX, event.offsetY);
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
+	}
+	keyboard(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.keyboard();
+			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+			this.redrawAll();
+		}
 	}
 }
 
-class analysisTool {
+class AnalysisTool {
 	static name() {return "Analysis Tool";}
 	needsRedraw() {;}
 	mouseWheel(deltaX, deltaY) {;}
@@ -222,7 +279,7 @@ class analysisTool {
 	mouseDown() {;}
 	mouseIn() {;}
 	mouseOut() {;}
-	mouseMove(arrayX, arrayY) {;}
+	mouseMove(pixelX, pixelY) {;}
 	keyboard(key) {;}
 	setArray(thermalArray) {;}
 	calculateAnalytics() {;}
@@ -231,9 +288,11 @@ class analysisTool {
 	drawAnalytics(analyticsDiv){;}
 }
 
-class pointerTool extends analysisTool{
+class PointerTool extends AnalysisTool {
 	static name() {return "Pointer Tool";}
 	constructor() {
+		super();
+		this.canvas = null;
 		this.redraw=false;
 		this.boxWidth=3;
 		this.boxHeight=3;
@@ -268,8 +327,12 @@ class pointerTool extends analysisTool{
 	mouseOut() {
 		this.dragging=false;
 	}
-	mouseMove(arrayX, arrayY) {
-		if(this.dragging) {
+	mouseMove(pixelX, pixelY) {
+		if(this.dragging && this.thermalArray && this.canvas) {
+			const arrayX = Math.floor(this.thermalArray[0].length * 
+					(pixelX / this.canvas.width))
+			const arrayY = Math.floor(this.thermalArray.length * 
+					(pixelY / this.canvas.height))
 			if(this.mouseX!=arrayX || this.mouseY!=arrayY)
 			{
 				this.mouseX=arrayX;
@@ -282,14 +345,20 @@ class pointerTool extends analysisTool{
 		this.thermalArray=thermalArray;
 		this.calculateAnalytics();
 	}
+
+	setCanvas(canvas) {
+		this.canvas = canvas;
+	}
+
 	calculateAnalytics() {
 		this.redraw=true;
 		if(this.mouseX===null || this.mouseY===null) {
-			this.mouseY=Math.Floor(this.thermalArray.length/2);
-			this.mouseX=Math.Floor(this.thermalArray[0].length/2);
+			this.mouseY=Math.floor(this.thermalArray.length/2);
+			this.mouseX=Math.floor(this.thermalArray[0].length/2);
 		}
 		this.getCursorAnalytics();
 	}
+
 	getCursorAnalytics() {
 		const x0 = this.mouseX-this.boxWidth;
 		const x1 = this.mouseX+this.boxWidth;
@@ -331,45 +400,47 @@ class pointerTool extends analysisTool{
 		this.analytics.x=this.mouseX;
 		this.analytics.y=this.mouseY;
 		this.analytics.thermalArray = this.thermalArray;
-	}
-	drawCursor(toolCanvas){
-			const arrayHeight = this.analytics.thermalArray.length;
-			const arrayWidth = this.analytics.thermalArray[0].length;
-			const canvasHeight = toolCanvas.height;
-			const canvasWidth = toolCanvas.width;
-			const toolCanvasCtx = toolCanvas.getContext('2d');
-			const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
-			const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
-			toolCanvasCtx.strokeStyle='black';
-			toolCanvasCtx.lineWidth=3;
-			toolCanvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
-			toolCanvasCtx.strokeRect(
-				((pixelInfo.x-this.boxWidth)*canvasInfo.scale)-1, 
-				((pixelInfo.y-this.boxHeight)*canvasInfo.scale)-1, 
-				(((2*this.boxWidth) +1)*canvasInfo.scale)+3, 
-				(((2*this.boxHeight) +1)*canvasInfo.scale)+3);
-			toolCanvasCtx.lineWidth=1;
-			toolCanvasCtx.strokeRect(
-				(pixelInfo.x*canvasInfo.scale), 
-				(pixelInfo.y*canvasInfo.scale), 
-				(canvasInfo.scale)+1, 
-				(canvasInfo.scale)+1);
-			toolCanvasCtx.strokeStyle='blue';
-			toolCanvasCtx.lineWidth=2;
-			toolCanvasCtx.strokeRect(
-				((this.minTemp.x)*canvasInfo.scale), 
-				((this.minTemp.y)*canvasInfo.scale), 
-				(canvasInfo.scale)+1, 
-				(canvasInfo.scale)+1);
-			toolCanvasCtx.strokeStyle='red';
-			toolCanvasCtx.lineWidth=2;
-			toolCanvasCtx.strokeRect(
-				((this.maxTemp.x)*canvasInfo.scale), 
-				((this.maxTemp.y)*canvasInfo.scale), 
-				(canvasInfo.scale)+1, 
-				(canvasInfo.scale)+1);
+		this.redraw=true;
 	}
 
+	drawCursor(canvas){
+			const arrayHeight = this.analytics.thermalArray.length;
+			const arrayWidth = this.analytics.thermalArray[0].length;
+			const canvasHeight = this.canvas.height;
+			const canvasWidth = this.canvas.width;
+			const canvasCtx = this.canvas.getContext('2d');
+			const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
+			const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
+			canvasCtx.strokeStyle='black';
+			canvasCtx.lineWidth=3;
+			canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
+			canvasCtx.strokeRect(
+				((this.analytics.x-this.boxWidth)*widthPixelScale)-1, 
+				((this.analytics.y-this.boxHeight)*heightPixelScale)-1, 
+				(((2*this.boxWidth) +1)*widthPixelScale)+3, 
+				(((2*this.boxHeight) +1)*heightPixelScale)+3);
+			canvasCtx.lineWidth=1;
+			canvasCtx.strokeRect(
+				(this.analytics.x*widthPixelScale), 
+				(this.analytics.y*heightPixelScale), 
+				(widthPixelScale)+1, 
+				(heightPixelScale)+1);
+			canvasCtx.strokeStyle='blue';
+			canvasCtx.lineWidth=2;
+			canvasCtx.strokeRect(
+				((this.analytics.minTemp.x)*widthPixelScale), 
+				((this.analytics.minTemp.y)*heightPixelScale), 
+				(widthPixelScale)+1, 
+				(heightPixelScale)+1);
+			canvasCtx.strokeStyle='red';
+			canvasCtx.lineWidth=2;
+			canvasCtx.strokeRect(
+				((this.analytics.maxTemp.x)*widthPixelScale), 
+				((this.analytics.maxTemp.y)*heightPixelScale), 
+				(widthPixelScale)+1, 
+				(heightPixelScale)+1);
+			this.redraw=false;
+	}
 	drawGraph(graphCanvas){;}
 	drawAnalytics(analyticsDiv){;}
 }
@@ -397,14 +468,21 @@ class IrThermalArrayView {
 		}
 	}
 
-	drawThermalArray(thermalArray, thermalCanvas) {
+	setThermalArray(thermalArray) {
+		this.thermalArray=thermalArray;
+	}
+
+	setCanvas(canvas) {
+		this.canvas = canvas;
+	}
+
+	drawThermalArray(thermalCanvas) {
 		if(this.activeColorPaletteModel===null) {
 			throw "No chosen color palette";
 		}
-		if(!thermalArray) {
+		if(!this.thermalArray) {
 			throw "No thermal array";
 		}
-		console.log(`IrThermalArrayView: Drawing thermal array`);
 		let minTemp = Infinity;
 		let maxTemp = -Infinity;
 		if(this.colorRangeFixed) {
@@ -412,7 +490,7 @@ class IrThermalArrayView {
 			maxTemp = this.colorRangeMax;
 		} else {
 			//Find min and max temperatures in array
-			for (let row of thermalArray) {
+			for (let row of this.thermalArray) {
 				for (let temp of row) {
 					if (!isNaN(temp)) {
 						minTemp = Math.min(minTemp, temp);
@@ -424,22 +502,22 @@ class IrThermalArrayView {
 		//Set the min/max temperatures in the color palette
 		this.activeColorPaletteModel.setMinMaxValues(minTemp,maxTemp);
 		//Find the correct pixel scale (pixels per array element)
-		const arrayHeight = thermalArray.length;
-		const arrayWidth = thermalArray[0].length;
-		const canvasHeight = thermalCanvas.height;
-		const canvasWidth = thermalCanvas.width;
-		const thermalCanvasCtx = thermalCanvas.getContext('2d');
+		const arrayHeight = this.thermalArray.length;
+		const arrayWidth = this.thermalArray[0].length;
+		const canvasHeight = this.canvas.height;
+		const canvasWidth = this.canvas.width;
+		const canvasCtx = this.canvas.getContext('2d');
 		const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
 		const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
 		//Render each element of the array as a rectangle
 		//Rectangle has sides according to widthpixelscale / heightpixelscale
-		thermalCanvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
+		canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
 		for (let y = 0; y < arrayHeight; y++) {
 			for (let x = 0; x < arrayWidth; x++) {
-				const pixelTemperature = thermalArray[y][x];
-				thermalCanvasCtx.fillStyle = 
+				const pixelTemperature = this.thermalArray[y][x];
+				canvasCtx.fillStyle = 
 						this.activeColorPaletteModel.getColorForValue(pixelTemperature);
-				thermalCanvasCtx.fillRect(
+				canvasCtx.fillRect(
 						x*widthPixelScale, 
 						y*heightPixelScale, 
 						widthPixelScale, 
@@ -827,7 +905,7 @@ function getSubArray(array, x0, x1, y0, y1) {
 			const subRow = [];
 			for (let j = x0; j <= x1; j++) {
 					if (i >= 0 && i < array.length &&
-								j >= 0 && j < (array[i] ? array.length : 0)) {
+								j >= 0 && j < (array[i] ? array[0].length : 0)) {
 							subRow.push(array[i][j]);
 					} 
 					else {
@@ -1021,6 +1099,67 @@ class ViridisPalette extends ColorPaletteModel{
 		];
 	}
 }
+
+
+//top level functions and control
+let thermalCanvas = null;
+let windowWidth = 0;
+let windowHeight = 0;
+let irAnalysisController = null;
+let colorPalette = null;
+let loadedTools = {};
+let loadedFiles = {};
+let toolPointer = new PointerTool();
+
+function startup() {
+	console.log("startup")
+	irAnalysisController = new IrAnalysisController(
+			"id_thermalCanvasSizeContainer",
+			"id_thermalCanvas",
+			"id_toolCanvas","");
+	colorPalette = new ViridisPalette();
+	irAnalysisController.setActiveColorPaletteModel(colorPalette);
+	window.addEventListener('resize', resizeWindow);
+}
+
+function handleFileUpload() {
+	const fileInput = document.getElementById('fileInput');
+	const irFile = fileInput.files[0];
+	if (!irFile) { 
+		console.log("No file selected.");
+	} else {
+		const irThermalArrayModel = new IrThermalArrayModel();
+		irThermalArrayModel.parseFile(irFile).then(() => {
+			loadedFiles['1']={};
+			loadedFiles['1'].irThermalArrayModel = irThermalArrayModel;
+			loadedFiles['1'].file = irFile;;
+			irAnalysisController.setActiveThermalArray(irThermalArrayModel);
+			setCanvasSize();
+		});
+	}
+	return;
+}
+
+function activatePointerTool() {
+	irAnalysisController.setActiveToolModel(toolPointer);
+}
+
+function newTemperatureData() {
+
+}
+
+function setCanvasSize() {
+	availableWidth=document.getElementById('id_thermalCanvasContainer')
+			.offsetWidth;
+	availableHeight=document.getElementById('id_thermalCanvasContainer')
+			.offsetHeight;
+	irAnalysisController.setAvailableSize(availableWidth,availableHeight);
+}
+
+function resizeWindow() {
+	setCanvasSize();
+}
+
 </script>
 </head>
 
@@ -1034,7 +1173,10 @@ class ViridisPalette extends ColorPaletteModel{
 
 			<div class="thermalanalytics-container">
 				<div class="thermalcanvas-container" id="id_thermalCanvasContainer">
-					<canvas class="thermalcanvas-element" id="id_thermalCanvas"></canvas>
+					<div class="thermalcanvas-size-container" id="id_thermalCanvasSizeContainer">
+						<canvas class="thermalcanvas-element thermalCanvas" id="id_thermalCanvas"></canvas>
+						<canvas class="thermalcanvas-element toolCanvas" id="id_toolCanvas"></canvas>
+					</div>
 				</div>
 				<div class="measurements-container">
 				</div>

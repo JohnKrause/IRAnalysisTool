@@ -12,7 +12,6 @@
 		padding: 0;
 		box-sizing: border-box;
 		}
-
 	body, html {
 		font-family: Arial, sans-serif;
 		background-color: #555;
@@ -36,7 +35,6 @@
 		margin: 5px;
 		text-align: left;
 	}
-
 	.app-container {
 		margin: 0;
 		display: flex;
@@ -44,7 +42,6 @@
 		width: 100%;
 		height: 100%;
 	}
-
 	.tool-container {
 		width: 20%;
 		height: auto;
@@ -53,7 +50,6 @@
 		background-color: rgba(25,200,255,0.1);
 		box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
 	}
-
 	.thermalanalytics-container{
 		width: 80%;
 		height: auto;
@@ -65,7 +61,6 @@
 		background-color: rgba(25,200,255,0.1);
 		box-shadow: 0px 0px 10px rgba(0,0,0,0.1);
 	}
-
 	.thermalcanvas-container{
 		margin: 0px;
 		height: 80%;
@@ -79,7 +74,6 @@
 		height: 20%;
 		width: auto;
 	}
-
 	.thermalcanvas-element {
 		position: absolute;
 		top:0;
@@ -91,11 +85,9 @@
 	.thermalcanvas-element:hover {
 		cursor: crosshair;
 	}
-
 	.toolCanvas {
 		z-index:2;
 	}
-
 	.thermalCanvas {
 		z-index:1;
 	}
@@ -103,25 +95,53 @@
 
 <script>
 
-class IrAnalysisController {
-	constructor(canvasDivId, irCanvasId, toolCanvasId, toolDivId) {
+class EventEmitter {
+	constructor() {
+		this.events = {};
+	}
+
+	addEventListener(event, listener) {
+		if (!this.events[event]) {
+			this.events[event] = [];
+		}
+		if (!this.events[event].includes(listener)) {
+				this.events[event].push(listener);
+		}
+	}
+
+	removeEventListener(event, listener) {
+		if (this.events[event]) {
+			const index = this.events[event].indexOf(listener);
+			if (index !== -1) {
+					this.events[event].splice(index, 1);
+			}
+		}
+	}
+
+	emit(type, event) {
+		console.log(`emit: ${event}`);
+		if (this.events[type]) {
+			this.events[type].forEach(listener => {
+				listener.call(this, event);
+			});
+		}
+	}
+}
+
+
+class IrAnalysisController extends EventEmitter{
+	constructor(containerDivId, canvasDivId) {
+		super();
+		this.containerDiv = document.getElementById(containerDivId);
 		this.canvasDiv = document.getElementById(canvasDivId);
-		this.thermalCanvas = document.getElementById(irCanvasId);
-		this.toolCanvas = document.getElementById(toolCanvasId);
 
-		this.irThermalArrayView = new IrThermalArrayView();
-		this.irThermalArrayView.setCanvas(this.thermalCanvas);
 		this.activeThermalArrayModel = null;
-
-		this.irThermalArrayView_redraw=true;
-		this.activeTool_redraw=true;
-		
-		//this.toolOverlayView = new ToolOverlayView(toolCanvasId);
-		//this.toolAnalysisView = new ToolAnalysisView(toolDivId);
-
+		this.activeThermalImageView = null;
 		this.activeToolModel = null;
-		//this.loadedToolModels = {};
-		//this.setToolModel(ToolPointerModel);
+		this.activeToolView = null;
+		this.activeColorPaletteModel = null;
+
+		this.containerDiv.addEventListener('resize',this.resizeDiv.bind(this));
 		this.canvasDiv.addEventListener('wheel',this.mouseWheel.bind(this));
 		this.canvasDiv.addEventListener('mouseup',this.mouseUp.bind(this));
 		this.canvasDiv.addEventListener('mousedown',this.mouseDown.bind(this));
@@ -131,149 +151,161 @@ class IrAnalysisController {
 		this.canvasDiv.addEventListener('keydown',this.keyboard.bind(this));
 	}
 
+	setActiveThermalImageView(thermalImageView) {
+		if(this.activeThermalImageView) {
+			this.activeThermalImageView.removeEventListener('draw',
+					this.drawThermalImage.bind(this));
+		}
+		this.activeThermalImageView=thermalImageView;
+		this.activeThermalImageView.addEventListener('draw',
+				this.drawThermalImage.bind(this));
+		this.synchronizeEverything();
+	}
+
+	setActiveToolView(ToolView) {
+		if(this.activeToolView) {
+			this.activeToolView.removeEventListener('draw',
+					this.drawTool.bind(this));
+		}
+		this.activeToolView=ToolView;
+		this.activeToolView.addEventListener('draw',
+				this.drawTool.bind(this));
+		this.synchronizeEverything();
+	}
+
 	setActiveToolModel(toolModel) {
+		if(this.activeToolModel) {
+			this.activeToolModel.removeEventListener('draw',
+					this.drawTool.bind(this));
+		}
 		this.activeToolModel=toolModel;
-		this.activeToolModel.setCanvas(this.toolCanvas);
-		this.updateToolArray();
-		this.redrawAll();
+		this.activeToolModel.addEventListener('draw',
+				this.drawTool.bind(this));
+		this.synchronizeEverything();
 	}
 
-	setActiveThermalArray(targetThermalArrayModel) {
-		this.activeThermalArrayModel = targetThermalArrayModel;
-		this.updateToolArray();
-		this.updateThermalCanvasArray();
-		this.redrawAll();
-	}
-
-	setActiveColorPaletteModel(targetColorPaletteModel) {
-		this.irThermalArrayView.setActiveColorPaletteModel(targetColorPaletteModel);
-		this.irThermalArrayView_redraw=true;
-		this.redrawAll();
-	}
-
-	setAvailableSize(availableWidth, availableHeight) {
+	setActiveThermalArrayModel(thermalArrayModel) {
+		console.log(`activate thermal array ${thermalArrayModel}`);
 		if(this.activeThermalArrayModel) {
-			const thermalArray = this.activeThermalArrayModel.getThermalArray();
-			const arrayHeight = thermalArray.length;
-			const arrayWidth = thermalArray[0].length;
-			const newHeight = Math.floor(availableHeight/arrayHeight)*arrayHeight;
-			const newWidth = Math.floor(availableWidth/arrayWidth)*arrayWidth;
-			if(newWidth!=this.toolCanvas.width || 
-					newHeight!=this.toolCanvas.height) {
-				this.canvasDiv.style.width=newWidth+'px';
-				this.canvasDiv.style.height=newHeight+'px';
-				this.thermalCanvas.width=newWidth;
-				this.thermalCanvas.height=newHeight;
-				this.toolCanvas.width=newWidth;
-				this.toolCanvas.height=newHeight;
-				this.irThermalArrayView_redraw=true;
-				this.activeTool_redraw=true;
-				this.redrawAll();
-			}
+			this.activeThermalArrayModel.removeEventListener('arraychange',
+					this.arrayChange.bind(this));
 		}
+		this.activeThermalArrayModel = thermalArrayModel;
+		this.activeThermalArrayModel.addEventListener('arraychange',
+				this.arrayChange.bind(this));
+		this.synchronizeEverything();
 	}
 
-	redrawAll() {
-		if(this.activeThermalArrayModel) {
-			let redraw = false;
-			if(this.activeToolModel && this.activeTool_redraw) {
-				this.drawTool();
-				redraw=true;
-			}
-			if(this.irThermalArrayView_redraw) {
-				this.updateThermalCanvasArray();
-				this.drawThermalCanvas();
-				redraw=true;
-			}
+	setActiveColorPaletteModel(colorPaletteModel) {
+		if(this.activeColorPaletteModel) {
+			this.activeColorPaletteModel.removeEventListener('palettechange',
+					this.paletteChange.bind(this));
 		}
+		this.activeColorPaletteModel = colorPaletteModel;
+		this.activeColorPaletteModel.addEventListener('palettechange',
+				this.paletteChange.bind(this));
+		this.synchronizeEverything();
 	}
 
-	updateToolArray() {
+	synchronizeEverything() {
+		//Make sure tool has the correct thermal array
 		if(this.activeThermalArrayModel && this.activeToolModel) {
 			const thermalArray = this.activeThermalArrayModel.getThermalArray();
 			this.activeToolModel.setArray(thermalArray);
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
+		}
+		//Make sure thermal array has correct color palette
+		if(this.activeColorPaletteModel && this.activeThermalArrayModel) {
+			this.activeThermalArrayModel.setActiveColorPaletteModel(
+					this.activeColorPaletteModel);
+		}
+		//Make sure the canvases are the correct size
+		this.resizeDiv({});
+	}
+
+	drawThermalImage(event) {
+		if(this.activeThermalArrayModel) {
+			const thermalImage = this.activeThermalArrayModel.getThermalImage();
+			this.activeThermalImageView.draw(thermalImage);
 		}
 	}
 
-	updateThermalCanvasArray() {
-		if(this.activeThermalArrayModel && this.irThermalArrayView) {
-			const thermalArray = this.activeThermalArrayModel.getThermalArray();
-			this.irThermalArrayView.setThermalArray(thermalArray);
-			this.irThermalArrayView_redraw=true;
+	drawTool(event) {
+		if(this.activeToolModel) {
+			const toolImage = this.activeToolModel.getToolImage();
+			this.activeToolView.draw(toolImage);
 		}
 	}
 
-	drawTool() {
-		try {
-			this.activeToolModel.drawCursor();
-		} catch (error) {
-			console.log(`Could not draw Tool: ${error}`);
+	arrayChange(event) {
+		if(this.activeToolModel) {
+			this.activeToolModel.thermalArrayChange();
 		}
 	}
 
-	drawThermalCanvas() {
-		try {
-			this.irThermalArrayView.drawThermalArray(this.thermalCanvasIrBuffer);
-		} catch (error) {
-			console.log(`Could not draw thermalCanvas: ${error}`);
+	paletteChange(event) {
+		if(this.activeThermalArrayModel) {
+			this.activeThermalArrayModel.paletteChange();
+		}
+	}
+
+	resizeDiv(event) {
+		if(this.activeThermalArrayModel) {
+			const arrayHeight = this.activeThermalArrayModel.arrayHeight();
+			const arrayWidth = this.activeThermalArrayModel.arrayWidth();
+			const divHeight = this.containerDiv.offsetHeight;
+			const divWidth = this.containerDiv.offsetWidth;
+
+			const canvasSize = calcCanvasSize(arrayWidth, arrayHeight, divWidth, divHeight);
+			this.canvasDiv.style.width = canvasSize.width+'px';
+			this.canvasDiv.style.height = canvasSize.height+'px';
+			if(this.activeThermalImageView) {
+				this.activeThermalImageView.setSize(canvasSize.width, canvasSize.height);
+			}
+			if(this.activeToolView) {
+				this.activeToolView.setSize(canvasSize.width, canvasSize.height);
+			}
 		}
 	}
 
 	mouseWheel(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseWheel(event.deltaX, event.deltaY);
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	mouseUp(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseUp();
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	mouseDown(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseDown();
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	mouseIn(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseIn();
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	mouseOut(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseOut();
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	mouseMove(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.mouseMove(event.offsetX, event.offsetY);
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 	keyboard(event) {
 		if(this.activeToolModel) {
 			this.activeToolModel.keyboard();
-			this.activeTool_redraw=this.activeToolModel.needsRedraw();
-			this.redrawAll();
 		}
 	}
 }
 
-class AnalysisTool {
+class AnalysisTool extends EventEmitter{
 	static name() {return "Analysis Tool";}
-	needsRedraw() {;}
 	mouseWheel(deltaX, deltaY) {;}
 	mouseUp() {;}
 	mouseDown() {;}
@@ -282,18 +314,13 @@ class AnalysisTool {
 	mouseMove(pixelX, pixelY) {;}
 	keyboard(key) {;}
 	setArray(thermalArray) {;}
-	calculateAnalytics() {;}
-	drawCursor(toolCanvas){;}
-	drawGraph(graphCanvas){;}
-	drawAnalytics(analyticsDiv){;}
+	getToolImage() {return [];}
 }
 
 class PointerTool extends AnalysisTool {
 	static name() {return "Pointer Tool";}
 	constructor() {
 		super();
-		this.canvas = null;
-		this.redraw=false;
 		this.boxWidth=3;
 		this.boxHeight=3;
 		this.mouseX=null;
@@ -302,19 +329,19 @@ class PointerTool extends AnalysisTool {
 		this.thermalArray=null;
 		this.analytics={minTemp:{},maxTemp:{},x:0,y:0,tArray:[],boxW:0,boxH:0};
 	}
-	needsRedraw() {
-		return this.redraw;
-	}
+
 	mouseWheel(deltaX, deltaY) {
 		if(deltaY < 0) {
 			this.boxWidth+=1;
 			this.boxHeight+=1;
 			this.calculateAnalytics();
+			this.emit('draw',{});
 		}
 		else if(deltaY > 0 && this.boxWidth>3) {
 			this.boxWidth-=1;
 			this.boxHeight-=1;
 			this.calculateAnalytics();
+			this.emit('draw',{});
 		}
 	}
 	mouseUp() {
@@ -327,31 +354,24 @@ class PointerTool extends AnalysisTool {
 	mouseOut() {
 		this.dragging=false;
 	}
-	mouseMove(pixelX, pixelY) {
-		if(this.dragging && this.thermalArray && this.canvas) {
-			const arrayX = Math.floor(this.thermalArray[0].length * 
-					(pixelX / this.canvas.width))
-			const arrayY = Math.floor(this.thermalArray.length * 
-					(pixelY / this.canvas.height))
-			if(this.mouseX!=arrayX || this.mouseY!=arrayY)
+	mouseMove(mouseX, mouseY) {
+		if(this.dragging && this.thermalArray) {
+			if(this.mouseX!=mouseX || this.mouseY!=mouseY)
 			{
-				this.mouseX=arrayX;
-				this.mouseY=arrayY;
+				this.mouseX=mouseX;
+				this.mouseY=mouseY;
 				this.getCursorAnalytics();
+				this.emit('draw',{});
 			}
 		}
 	}
 	setArray(thermalArray) {
 		this.thermalArray=thermalArray;
 		this.calculateAnalytics();
-	}
-
-	setCanvas(canvas) {
-		this.canvas = canvas;
+		this.emit('draw',{});
 	}
 
 	calculateAnalytics() {
-		this.redraw=true;
 		if(this.mouseX===null || this.mouseY===null) {
 			this.mouseY=Math.floor(this.thermalArray.length/2);
 			this.mouseX=Math.floor(this.thermalArray[0].length/2);
@@ -400,159 +420,199 @@ class PointerTool extends AnalysisTool {
 		this.analytics.x=this.mouseX;
 		this.analytics.y=this.mouseY;
 		this.analytics.thermalArray = this.thermalArray;
-		this.redraw=true;
 	}
 
-	drawCursor(canvas){
-			const arrayHeight = this.analytics.thermalArray.length;
-			const arrayWidth = this.analytics.thermalArray[0].length;
+	getToolImage() {
+		let toolImageGraphics=[];
+		//Inner box
+		let centerBox={type:'box', 
+				x:this.analytics.x, y:this.analytics.y,
+				w:1, h:1, 
+				color:'black', stroke:'thin'};
+		let windowBox={type:'box', 
+				x:this.analytics.x, y:this.analytics.y,
+				w:this.analytics.boxW, h:this.analytics.boxH, 
+				color:'black', stroke:'bold'};
+		let minBox={type:'box', 
+				x:this.analytics.minTemp.x, y:this.analytics.minTemp.y,
+				w:1, h:1, 
+				color:'blue', stroke:'normal'};
+		let maxBox={type:'box', 
+				x:this.analytics.maxTemp.x, y:this.analytics.maxTemp.y,
+				w:1, h:1, 
+				color:'red', stroke:'normal'};
+		toolImageGraphics.push(centerBox);
+		toolImageGraphics.push(windowBox);
+		toolImageGraphics.push(minBox);
+		toolImageGraphics.push(maxBox);
+		return toolImageGraphics;
+	}
+}
+
+class CanvasGraphicsView extends EventEmitter{
+	constructor(canvasId) {
+		super();
+		this.canvas = document.getElementById(canvasId);
+	}
+
+	setCanvas(canvasId) {
+		this.canvas = document.getElementById(canvasId);
+		this.emit('draw',{});
+	}
+
+	setSize(canvasWidth, canvasHeight) {
+		if(this.canvas.width!=canvasWidth ||
+				this.canvas.height!=canvasHeight) {
+			this.canvas.width = canvasWidth;
+			this.canvas.height = canvasHeight;
+			this.emit('draw',{});
+		}
+	}
+
+	clearCanvas() {
+		const canvasCtx = this.canvas.getContext('2d');
+		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
+	}
+
+	drawBox(instruction) {
+			const boxX = instruction.x;
+			const boxY = instruction.y;
+			const boxW = instruction.w;
+			const boxH = instruction.h;
+			let boxStroke = 1;
+			switch(instruction.stroke) {
+				case 'bold':
+					boxStroke=3;
+					break;
+				case 'thin':
+					boxStroke=1;
+					break;
+				case 'normal':
+					boxStroke=2;
+					break;
+			}
+			const boxColor = instruction.color;
+			const pixelScaleX = instruction.pixelScale.x;
+			const pixelScaleY = instruction.pixelScale.y;
 			const canvasHeight = this.canvas.height;
 			const canvasWidth = this.canvas.width;
 			const canvasCtx = this.canvas.getContext('2d');
-			const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
-			const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
-			canvasCtx.strokeStyle='black';
-			canvasCtx.lineWidth=3;
-			canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
+
+			canvasCtx.strokeStyle=boxColor;
+			canvasCtx.lineWidth=boxStroke;
 			canvasCtx.strokeRect(
-				((this.analytics.x-this.boxWidth)*widthPixelScale)-1, 
-				((this.analytics.y-this.boxHeight)*heightPixelScale)-1, 
-				(((2*this.boxWidth) +1)*widthPixelScale)+3, 
-				(((2*this.boxHeight) +1)*heightPixelScale)+3);
-			canvasCtx.lineWidth=1;
-			canvasCtx.strokeRect(
-				(this.analytics.x*widthPixelScale), 
-				(this.analytics.y*heightPixelScale), 
-				(widthPixelScale)+1, 
-				(heightPixelScale)+1);
-			canvasCtx.strokeStyle='blue';
-			canvasCtx.lineWidth=2;
-			canvasCtx.strokeRect(
-				((this.analytics.minTemp.x)*widthPixelScale), 
-				((this.analytics.minTemp.y)*heightPixelScale), 
-				(widthPixelScale)+1, 
-				(heightPixelScale)+1);
-			canvasCtx.strokeStyle='red';
-			canvasCtx.lineWidth=2;
-			canvasCtx.strokeRect(
-				((this.analytics.maxTemp.x)*widthPixelScale), 
-				((this.analytics.maxTemp.y)*heightPixelScale), 
-				(widthPixelScale)+1, 
-				(heightPixelScale)+1);
-			this.redraw=false;
-	}
-	drawGraph(graphCanvas){;}
-	drawAnalytics(analyticsDiv){;}
-}
-
-
-class IrThermalArrayView {
-	constructor() {
-		this.activeColorPaletteModel=null;
-		this.colorRangeMin=100;
-		this.colorRangeMax=400;
-		this.colorRangeFixed=false;
+				((boxX-boxW)*pixelScaleX)-Math.floor(boxStroke/2), 
+				((boxY-boxH)*pixelScaleY)-Math.floor(boxStroke/2), 
+				(((2*boxW)+1)*widthPixelScale)+pixelScaleX+Math.floor(boxStroke/2), 
+				(((2*boxH)+1)*heightPixelScale)+pixelScaleY+Math.floor(boxStroke/2));
 	}
 
-	setActiveColorPaletteModel(targetColorPaletteModel) {
-		this.activeColorPaletteModel = targetColorPaletteModel;
-	}
-
-	setColorPaletteRange(rangeMode, rangeMin, rangeMax) {
-		if(rangeMode === 'fixed') {
-			this.colorRangeFixed=true;
-			this.colorRangeMin = rangeMin;
-			this.colorRangeMax = rangeMax;
-		} else { //adaptive
-			this.colorRangeFixed=false;
-		}
-	}
-
-	setThermalArray(thermalArray) {
-		this.thermalArray=thermalArray;
-	}
-
-	setCanvas(canvas) {
-		this.canvas = canvas;
-	}
-
-	drawThermalArray(thermalCanvas) {
-		if(this.activeColorPaletteModel===null) {
-			throw "No chosen color palette";
-		}
-		if(!this.thermalArray) {
-			throw "No thermal array";
-		}
-		let minTemp = Infinity;
-		let maxTemp = -Infinity;
-		if(this.colorRangeFixed) {
-			minTemp = this.colorRangeMin;
-			maxTemp = this.colorRangeMax;
-		} else {
-			//Find min and max temperatures in array
-			for (let row of this.thermalArray) {
-				for (let temp of row) {
-					if (!isNaN(temp)) {
-						minTemp = Math.min(minTemp, temp);
-						maxTemp = Math.max(maxTemp, temp);
-					}
-				}
-			}
-		}
-		//Set the min/max temperatures in the color palette
-		this.activeColorPaletteModel.setMinMaxValues(minTemp,maxTemp);
-		//Find the correct pixel scale (pixels per array element)
-		const arrayHeight = this.thermalArray.length;
-		const arrayWidth = this.thermalArray[0].length;
+	drawPixelArray(instruction) {
+		const pixelArray = instruction.pixelArray;
+		const pixelScaleX = instruction.pixelScale.x;
+		const pixelScaleY = instruction.pixelScale.y;
+		const arrayHeight = pixelArray.length;
+		const arrayWidth = pixelArray[0].length;
 		const canvasHeight = this.canvas.height;
 		const canvasWidth = this.canvas.width;
 		const canvasCtx = this.canvas.getContext('2d');
-		const widthPixelScale = Math.floor(canvasWidth / arrayWidth);
-		const heightPixelScale = Math.floor(canvasHeight / arrayHeight);
+
 		//Render each element of the array as a rectangle
 		//Rectangle has sides according to widthpixelscale / heightpixelscale
-		canvasCtx.clearRect(0,0,canvasWidth, canvasHeight);
 		for (let y = 0; y < arrayHeight; y++) {
 			for (let x = 0; x < arrayWidth; x++) {
-				const pixelTemperature = this.thermalArray[y][x];
-				canvasCtx.fillStyle = 
-						this.activeColorPaletteModel.getColorForValue(pixelTemperature);
+				const pixelColor = this.pixelArray[y][x];
+				canvasCtx.fillStyle = pixelColor;
 				canvasCtx.fillRect(
-						x*widthPixelScale, 
-						y*heightPixelScale, 
-						widthPixelScale, 
-						heightPixelScale);
+						x*pixelScaleX, 
+						y*pixelScaleY, 
+						pixelScaleX, 
+						pixelScaleY);
+			}
+		}
+	}
+
+	draw(drawInstructions) {
+		this.clearCanvas();
+		for (let instruction of drawInstructions) {
+			switch(instruction.type) {
+			case 'pixelarray':
+				this.drawPixelArray(instruction);
+				break;
+			case 'box':
+				this.drawBox(instruction);
+				break;
 			}
 		}
 	}
 }
 
-class IrThermalArrayModel {
+class ThermalImageView extends CanvasGraphicsView {}
+
+class ToolView extends CanvasGraphicsView {}
+
+class ThermalArrayModel extends EventEmitter{
 	constructor() {
-		console.log("IrThermalArrayModel: make array model");
+		super();
+		console.log("ThermalArrayModel: make array model");
 		this.thermalArray=[];
-		this.irThermalImageModel = new IrThermalImageModel();
+		this.thermalFileModel = new ThermalFileModel();
+		this.activeColorPaletteModel = null;
+	}
+
+	arrayWidth() {
+		return this.thermalArray[0].length;
+	}
+
+	arrayHeight() {
+		return this.thermalArray.length;
 	}
 
 	getThermalArray() {
 		return this.thermalArray;
 	}
 
+	getThermalImage() {
+		let thermalImageArray = [];
+		//Find min and max values of temperature array
+		if(this.thermalArray) {
+			this.activeColorPaletteModel.initializePalette(this.thermalArray);
+			for (let row of valueArray) {
+				for (let value of row) {
+					let thermalRow =[]
+					if (!isNaN(value)) {
+						thermalRow.push(
+								this.activeColorPaletteModel.getColorForValue(value));
+					} else {
+						thermalRow.push(this.activeColorPaletteModel.nullColor());
+					}
+				}
+			}
+		}
+		let graphicsInstructions = {type:'pixelarray',
+				pixelArray:thermalImageArray};
+		return graphicsInstructions;
+	}
+
 	parseFile(irFile) {
 		return new Promise((resolve, reject) => {
-			this.irThermalImageModel.loadFile(irFile).then(() => {
+			this.thermalFileModel.loadFile(irFile).then(() => {
 				this.createThermalArray();
 				resolve();
 			}).catch((error) => {
 				reject(new Error(error));
 			});
 		});
-		
+	}
+
+	setActiveColorPaletteModel(colorPaletteModel) {
+		this.activeColorPaletteModel=colorPaletteModel;
+		this.emit('draw',{});
 	}
 
 	createThermalArray() {
-		const rawData=this.irThermalImageModel.dataFLIR.rawData;
-		const cameraData=this.irThermalImageModel.dataFLIR.cameraData;
+		const rawData=this.thermalFileModel.dataFLIR.rawData;
+		const cameraData=this.thermalFileModel.dataFLIR.cameraData;
 		if(!rawData || !cameraData) {
 			throw "Did not find raw camera data";
 		}
@@ -583,11 +643,13 @@ class IrThermalArrayModel {
 			}
 			this.thermalArray.push(row)
 		}
+		this.emit('draw',{});
 	}
 }
 
-class IrThermalImageModel {
+class ThermalFileModel extends EventEmitter{
 	constructor() {
+		super();
 		this.byteArray=null;
 		this.segmentList=[];
 		this.bytesFLIR=[];
@@ -895,8 +957,6 @@ class IrThermalImageModel {
 	}
 }
 
-
-
 function getSubArray(array, x0, x1, y0, y1) {
 	//Returns an subarray from Array from x0,y0 to x1,y1. 
 	//Values outside the array are returned as null
@@ -916,8 +976,7 @@ function getSubArray(array, x0, x1, y0, y1) {
 	}
 	return subArray;
 }
-function get32float(array, offset, reverse=false) 
-{
+function get32float(array, offset, reverse=false) {
 		const buffer = new ArrayBuffer(8);
 		const view = new DataView(buffer);
 		if(reverse) {
@@ -933,9 +992,7 @@ function get32float(array, offset, reverse=false)
 		}    
 		return view.getFloat32(0);
 }
-
-function get32u(array, offset, reverse=false)
-{
+function get32u(array, offset, reverse=false) {
 	if(reverse) {
 		return array[offset+3]<<24 | array[offset+2]<<16 | 
 				array[offset+1]<<8 | array[offset]<<0;
@@ -943,51 +1000,39 @@ function get32u(array, offset, reverse=false)
 	return array[offset]<<24 | array[offset+1]<<16 | 
 			array[offset+2]<<8 | array[offset+3]<<0;
 }
-
-function get32s(array, offset, reverse=false)
-{
+function get32s(array, offset, reverse=false) {
 	//TODO
 	//apparently get32u will return negative values already?
 	return get32u(array, offset, reverse);
 }
-
-function get32u_array(array, offset, len, reverse=false)
-{
+function get32u_array(array, offset, len, reverse=false) {
 	let array_32u=[];
 	for(let i=0; i<len; i++) {
 		array_32u.push(get32u(array, offset+(4*i), reverse));
 	}
 	return array_32u;
 }
-
-function get16u(array, offset,reverse=false)
-{
+function get16u(array, offset,reverse=false) {
 	if(reverse) {
 		return array[offset+1]<<8 | array[offset]<<0;
 	}
 	return array[offset]<<8 | array[offset+1]<<0;
 }
-
-function get16u_array(array, offset, len, reverse=false)
-{
+function get16u_array(array, offset, len, reverse=false) {
 	let array_16u=[];
 	for(let i=0; i<len; i++) {
 		array_16u.push(get16u(array, offset+(2*i), reverse));
 	}
 	return array_16u;
 }
-
-function getstring(array, offset, len, reverse=false)
-{
+function getstring(array, offset, len, reverse=false) {
 	let string="";
 	for(let i=0; i<len; i++) {
 		string+=String.fromCharCode(array[offset+i]);
 	}
 	return string;
 }
-
-function concatenateUint8Arrays(...arrays) 
-{
+function concatenateUint8Arrays(...arrays) {
 		let totalLength = 0;
 		for (let arr of arrays) {
 				totalLength += arr.length;
@@ -1001,17 +1046,46 @@ function concatenateUint8Arrays(...arrays)
 		
 		return result;
 }
+function calcCanvasSize(arrayWidth, arrayHeight, divWidth, divHeight) {
+	const newHeight = Math.floor(divHeight/arrayHeight)*arrayHeight;
+	const newWidth = Math.floor(divWidth/arrayWidth)*arrayWidth;
+	return {width:newWidth, height:newHeight}
+}
 
-class ColorPaletteModel {
+class ColorPaletteModel extends EventEmitter{
 	constructor() {
+		super();
 		this.minValue = 0;
 		this.maxValue = 100;
 		this.palette = [[0,0,0],[255,255,255]];
 	}
 
-	setMinMaxValues(minValue, maxValue) {
-		this.minValue = minValue;
-		this.maxValue = maxValue;
+	initializePalette(valueArray) {
+		let minValue = Infinity;
+		let maxValue = -Infinity;
+		for (let row of valueArray) {
+			if(row.isArray()) {
+				for (let value of row) {
+					if (!isNaN(value)) {
+						minValue = Math.min(minValue, value);
+						maxValue = Math.max(maxValue, value);
+					}
+				}
+			} else {
+				if (!isNaN(value)) {
+					minValue = Math.min(minValue, row);
+					maxValue = Math.max(maxValue, row);
+				}
+			}
+		}
+	}
+
+	changePaletteValue() {
+		this.emit("palettechange",{});
+	}
+
+	nullColor() {
+		return `rgb(0,0,0)`;
 	}
 
 	getColorForValue(value) {
@@ -1099,67 +1173,69 @@ class ViridisPalette extends ColorPaletteModel{
 		];
 	}
 }
+</script>
 
+<script>
+	//top level functions and control
 
-//top level functions and control
-let thermalCanvas = null;
-let windowWidth = 0;
-let windowHeight = 0;
-let irAnalysisController = null;
-let colorPalette = null;
-let loadedTools = {};
-let loadedFiles = {};
-let toolPointer = new PointerTool();
+	let loadedTools = {};
+	let loadedFiles = {};
 
-function startup() {
-	console.log("startup")
-	irAnalysisController = new IrAnalysisController(
-			"id_thermalCanvasSizeContainer",
-			"id_thermalCanvas",
-			"id_toolCanvas","");
-	colorPalette = new ViridisPalette();
-	irAnalysisController.setActiveColorPaletteModel(colorPalette);
-	window.addEventListener('resize', resizeWindow);
-}
+	let thermalImageView = null;
+	let thermalArrayModel = null;
+	let toolView = null;
+	let toolModel = null;
+	let colorPaletteModel = null;
+	let irAnalysisController = null;
 
-function handleFileUpload() {
-	const fileInput = document.getElementById('fileInput');
-	const irFile = fileInput.files[0];
-	if (!irFile) { 
-		console.log("No file selected.");
-	} else {
-		const irThermalArrayModel = new IrThermalArrayModel();
-		irThermalArrayModel.parseFile(irFile).then(() => {
-			loadedFiles['1']={};
-			loadedFiles['1'].irThermalArrayModel = irThermalArrayModel;
-			loadedFiles['1'].file = irFile;;
-			irAnalysisController.setActiveThermalArray(irThermalArrayModel);
-			setCanvasSize();
-		});
+	function startup() {
+		console.log("startup")
+		thermalImageView = new ThermalImageView("id_thermalCanvas");
+		toolView = new ToolView("id_toolCanvas");
+		toolModel = new PointerTool();
+		colorPaletteModel = new ViridisPalette();
+		irAnalysisController = new IrAnalysisController(
+				"id_thermalCanvasContainer",
+				"id_thermalCanvasSizeContainer");
+		irAnalysisController.setActiveColorPaletteModel(colorPaletteModel);
+		irAnalysisController.setActiveThermalImageView(thermalImageView);
+		irAnalysisController.setActiveToolModel(toolModel);
+		irAnalysisController.setActiveToolView(toolView);
 	}
-	return;
-}
 
-function activatePointerTool() {
-	irAnalysisController.setActiveToolModel(toolPointer);
-}
+	function handleFileUpload() {
+		const fileInput = document.getElementById('fileInput');
+		const irFile = fileInput.files[0];
+		if (!irFile) { 
+			console.log("No file selected.");
+		} else {
+			thermalArrayModel = new ThermalArrayModel();
+			thermalArrayModel.parseFile(irFile).then(() => {
+				loadedFiles['1']={};
+				loadedFiles['1'].thermalArrayModel = thermalArrayModel;
+				loadedFiles['1'].file = irFile;;
+				irAnalysisController.setActiveThermalArrayModel(thermalArrayModel);
+				setCanvasSize();
+			});
+		}
+		return;
+	}
 
-function newTemperatureData() {
+	function activatePointerTool() {
+		irAnalysisController.setActiveToolModel(toolPointer);
+	}
 
-}
+	function newTemperatureData() {
 
-function setCanvasSize() {
-	availableWidth=document.getElementById('id_thermalCanvasContainer')
-			.offsetWidth;
-	availableHeight=document.getElementById('id_thermalCanvasContainer')
-			.offsetHeight;
-	irAnalysisController.setAvailableSize(availableWidth,availableHeight);
-}
+	}
 
-function resizeWindow() {
-	setCanvasSize();
-}
+	function setCanvasSize() {
 
+	}
+
+	function resizeWindow() {
+		setCanvasSize();
+	}
 </script>
 </head>
 

@@ -119,7 +119,6 @@ class EventEmitter {
 	}
 
 	emit(type, event) {
-		console.log(`emit: ${event}`);
 		if (this.events[type]) {
 			this.events[type].forEach(listener => {
 				listener.call(this, event);
@@ -185,7 +184,6 @@ class IrAnalysisController extends EventEmitter{
 	}
 
 	setActiveThermalArrayModel(thermalArrayModel) {
-		console.log(`activate thermal array ${thermalArrayModel}`);
 		if(this.activeThermalArrayModel) {
 			this.activeThermalArrayModel.removeEventListener('arraychange',
 					this.arrayChange.bind(this));
@@ -224,15 +222,25 @@ class IrAnalysisController extends EventEmitter{
 
 	drawThermalImage(event) {
 		if(this.activeThermalArrayModel) {
-			const thermalImage = this.activeThermalArrayModel.getThermalImage();
-			this.activeThermalImageView.draw(thermalImage);
+			let thermalImageGraphics = this.activeThermalArrayModel.getThermalImage();
+			thermalImageGraphics = calcGraphicPixelScale(thermalImageGraphics, 
+					this.activeThermalArrayModel.arrayWidth(),
+					this.activeThermalArrayModel.arrayHeight(),
+					this.activeThermalImageView.canvasWidth(),
+					this.activeThermalImageView.canvasHeight());
+			this.activeThermalImageView.draw(thermalImageGraphics);
 		}
 	}
 
 	drawTool(event) {
 		if(this.activeToolModel) {
-			const toolImage = this.activeToolModel.getToolImage();
-			this.activeToolView.draw(toolImage);
+			let toolImageGraphics = this.activeToolModel.getToolImage();
+			toolImageGraphics = calcGraphicPixelScale(toolImageGraphics, 
+					this.activeThermalArrayModel.arrayWidth(),
+					this.activeThermalArrayModel.arrayHeight(),
+					this.activeThermalImageView.canvasWidth(),
+					this.activeThermalImageView.canvasHeight());
+			this.activeToolView.draw(toolImageGraphics);
 		}
 	}
 
@@ -249,6 +257,7 @@ class IrAnalysisController extends EventEmitter{
 	}
 
 	resizeDiv(event) {
+		console.log('resize div');
 		if(this.activeThermalArrayModel) {
 			const arrayHeight = this.activeThermalArrayModel.arrayHeight();
 			const arrayWidth = this.activeThermalArrayModel.arrayWidth();
@@ -294,7 +303,13 @@ class IrAnalysisController extends EventEmitter{
 	}
 	mouseMove(event) {
 		if(this.activeToolModel) {
-			this.activeToolModel.mouseMove(event.offsetX, event.offsetY);
+			let arrayLoc = calcArrayLocfromPixelLoc(
+					event.offsetX, event.offsetY,
+					this.activeThermalArrayModel.arrayWidth(),
+					this.activeThermalArrayModel.arrayHeight(),
+					this.activeThermalImageView.canvasWidth(),
+					this.activeThermalImageView.canvasHeight());
+			this.activeToolModel.mouseMove(arrayLoc.x, arrayLoc.y);
 		}
 	}
 	keyboard(event) {
@@ -460,6 +475,14 @@ class CanvasGraphicsView extends EventEmitter{
 		this.emit('draw',{});
 	}
 
+	canvasWidth() {
+		return this.canvas.width;
+	}
+
+	canvasHeight() {
+		return this.canvas.height;
+	}
+
 	setSize(canvasWidth, canvasHeight) {
 		if(this.canvas.width!=canvasWidth ||
 				this.canvas.height!=canvasHeight) {
@@ -503,8 +526,8 @@ class CanvasGraphicsView extends EventEmitter{
 			canvasCtx.strokeRect(
 				((boxX-boxW)*pixelScaleX)-Math.floor(boxStroke/2), 
 				((boxY-boxH)*pixelScaleY)-Math.floor(boxStroke/2), 
-				(((2*boxW)+1)*widthPixelScale)+pixelScaleX+Math.floor(boxStroke/2), 
-				(((2*boxH)+1)*heightPixelScale)+pixelScaleY+Math.floor(boxStroke/2));
+				(((2*boxW)+1)*pixelScaleX)+pixelScaleX+Math.floor(boxStroke/2), 
+				(((2*boxH)+1)*pixelScaleY)+pixelScaleY+Math.floor(boxStroke/2));
 	}
 
 	drawPixelArray(instruction) {
@@ -521,7 +544,7 @@ class CanvasGraphicsView extends EventEmitter{
 		//Rectangle has sides according to widthpixelscale / heightpixelscale
 		for (let y = 0; y < arrayHeight; y++) {
 			for (let x = 0; x < arrayWidth; x++) {
-				const pixelColor = this.pixelArray[y][x];
+				const pixelColor = pixelArray[y][x];
 				canvasCtx.fillStyle = pixelColor;
 				canvasCtx.fillRect(
 						x*pixelScaleX, 
@@ -576,10 +599,11 @@ class ThermalArrayModel extends EventEmitter{
 		let thermalImageArray = [];
 		//Find min and max values of temperature array
 		if(this.thermalArray) {
+			console.log(this.thermalArray);
 			this.activeColorPaletteModel.initializePalette(this.thermalArray);
-			for (let row of valueArray) {
+			for (let row of this.thermalArray) {
+				let thermalRow =[]
 				for (let value of row) {
-					let thermalRow =[]
 					if (!isNaN(value)) {
 						thermalRow.push(
 								this.activeColorPaletteModel.getColorForValue(value));
@@ -587,10 +611,11 @@ class ThermalArrayModel extends EventEmitter{
 						thermalRow.push(this.activeColorPaletteModel.nullColor());
 					}
 				}
+				thermalImageArray.push(thermalRow);
 			}
 		}
-		let graphicsInstructions = {type:'pixelarray',
-				pixelArray:thermalImageArray};
+		let graphicsInstructions = [{type:'pixelarray',
+				pixelArray:thermalImageArray}];
 		return graphicsInstructions;
 	}
 
@@ -1046,10 +1071,26 @@ function concatenateUint8Arrays(...arrays) {
 		
 		return result;
 }
+
 function calcCanvasSize(arrayWidth, arrayHeight, divWidth, divHeight) {
 	const newHeight = Math.floor(divHeight/arrayHeight)*arrayHeight;
 	const newWidth = Math.floor(divWidth/arrayWidth)*arrayWidth;
 	return {width:newWidth, height:newHeight}
+}
+function calcGraphicPixelScale(drawInstructions, arrayWidth, arrayHeight, 
+		canvasWidth, canvasHeight) {
+	const pixelScaleX = Math.floor(canvasWidth/arrayWidth);
+	const pixelScaleY = Math.floor(canvasHeight/arrayHeight);
+	for (let instruction of drawInstructions) {
+		instruction.pixelScale={x:pixelScaleY, y:pixelScaleY};
+	}
+	return drawInstructions;
+}
+function calcArrayLocfromPixelLoc(pixelX, pixelY, arrayWidth, arrayHeight, 
+		canvasWidth, canvasHeight) {
+	const arrayX = Math.floor(arrayWidth * pixelX / canvasWidth);
+	const arrayY = Math.floor(arrayHeight * pixelY / canvasHeight);
+	return {x:arrayX, y:arrayY};
 }
 
 class ColorPaletteModel extends EventEmitter{
@@ -1064,7 +1105,7 @@ class ColorPaletteModel extends EventEmitter{
 		let minValue = Infinity;
 		let maxValue = -Infinity;
 		for (let row of valueArray) {
-			if(row.isArray()) {
+			if(Array.isArray(row)) {
 				for (let value of row) {
 					if (!isNaN(value)) {
 						minValue = Math.min(minValue, value);
@@ -1078,6 +1119,8 @@ class ColorPaletteModel extends EventEmitter{
 				}
 			}
 		}
+		this.minValue = minValue;
+		this.maxValue = maxValue;
 	}
 
 	changePaletteValue() {

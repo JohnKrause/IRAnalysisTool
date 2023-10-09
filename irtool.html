@@ -442,7 +442,7 @@ class PointerTool extends AnalysisTool {
 		//Inner box
 		let centerBox={type:'box', 
 				x:this.analytics.x, y:this.analytics.y,
-				w:1, h:1, 
+				w:0, h:0, 
 				color:'black', stroke:'thin'};
 		let windowBox={type:'box', 
 				x:this.analytics.x, y:this.analytics.y,
@@ -450,11 +450,11 @@ class PointerTool extends AnalysisTool {
 				color:'black', stroke:'bold'};
 		let minBox={type:'box', 
 				x:this.analytics.minTemp.x, y:this.analytics.minTemp.y,
-				w:1, h:1, 
+				w:0, h:0, 
 				color:'blue', stroke:'normal'};
 		let maxBox={type:'box', 
 				x:this.analytics.maxTemp.x, y:this.analytics.maxTemp.y,
-				w:1, h:1, 
+				w:0, h:0, 
 				color:'red', stroke:'normal'};
 		toolImageGraphics.push(centerBox);
 		toolImageGraphics.push(windowBox);
@@ -526,8 +526,8 @@ class CanvasGraphicsView extends EventEmitter{
 			canvasCtx.strokeRect(
 				((boxX-boxW)*pixelScaleX)-Math.floor(boxStroke/2), 
 				((boxY-boxH)*pixelScaleY)-Math.floor(boxStroke/2), 
-				(((2*boxW)+1)*pixelScaleX)+pixelScaleX+Math.floor(boxStroke/2), 
-				(((2*boxH)+1)*pixelScaleY)+pixelScaleY+Math.floor(boxStroke/2));
+				(((2*boxW)+1)*pixelScaleX)+Math.floor(boxStroke/2), 
+				(((2*boxH)+1)*pixelScaleY)+Math.floor(boxStroke/2));
 	}
 
 	drawPixelArray(instruction) {

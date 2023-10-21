@@ -69,11 +69,6 @@
 	.thermalcanvas-size-container{
 		position: relative;
 	}
-	.measurements-container{
-		margin: 0px;
-		height: 20%;
-		width: auto;
-	}
 	.thermalcanvas-element {
 		position: absolute;
 		top:0;
@@ -90,6 +85,29 @@
 	}
 	.thermalCanvas {
 		z-index:1;
+	}
+	.analysis-container {
+		margin: 0px;
+		height: 20%;
+		width: auto;
+
+		display: flex;
+		flex-direction: row;
+	}
+	.analysisinfo-container {
+		width: 50%;
+		height: 100%;
+	}
+	.analysiscanvas-container {
+		width: 50%;
+		height: 100%;
+	}
+	.analysisCanvas {
+		top:0;
+		left:0;
+		width: 100%;
+		height: 100%;
+		border: solid;
 	}
 </style>
 
@@ -127,7 +145,6 @@ class EventEmitter {
 	}
 }
 
-
 class IrAnalysisController extends EventEmitter{
 	constructor(containerDivId, canvasDivId) {
 		super();
@@ -138,6 +155,7 @@ class IrAnalysisController extends EventEmitter{
 		this.activeThermalImageView = null;
 		this.activeToolModel = null;
 		this.activeToolView = null;
+		this.activeAnalysisView = null;
 		this.activeColorPaletteModel = null;
 
 		this.containerDiv.addEventListener('resize',this.resizeDiv.bind(this));
@@ -161,14 +179,27 @@ class IrAnalysisController extends EventEmitter{
 		this.synchronizeEverything();
 	}
 
-	setActiveToolView(ToolView) {
+	setActiveToolView(toolView) {
 		if(this.activeToolView) {
 			this.activeToolView.removeEventListener('draw',
 					this.drawTool.bind(this));
 		}
-		this.activeToolView=ToolView;
+		this.activeToolView=toolView;
 		this.activeToolView.addEventListener('draw',
 				this.drawTool.bind(this));
+		this.synchronizeEverything();
+	}
+
+	setActiveAnalysisView(analysisView) {
+		if(this.activeAnalysisView) {
+			this.activeAnalysisView.hide();
+			this.activeToolView.removeEventListener('draw',
+					this.drawAnalysis.bind(this));
+		}
+		this.activeAnalysisView=analysisView;
+		this.activeAnalysisView.display();
+		this.activeAnalysisView.addEventListener('draw',
+				this.drawAnalysis.bind(this));
 		this.synchronizeEverything();
 	}
 
@@ -205,6 +236,7 @@ class IrAnalysisController extends EventEmitter{
 		this.synchronizeEverything();
 	}
 
+
 	synchronizeEverything() {
 		//Make sure tool has the correct thermal array
 		if(this.activeThermalArrayModel && this.activeToolModel) {
@@ -234,13 +266,23 @@ class IrAnalysisController extends EventEmitter{
 
 	drawTool(event) {
 		if(this.activeToolModel) {
-			let toolImageGraphics = this.activeToolModel.getToolImage();
+			let toolImageGraphics = this.activeToolModel.getToolGraphics();
 			toolImageGraphics = calcGraphicPixelScale(toolImageGraphics, 
 					this.activeThermalArrayModel.arrayWidth(),
 					this.activeThermalArrayModel.arrayHeight(),
 					this.activeThermalImageView.canvasWidth(),
 					this.activeThermalImageView.canvasHeight());
 			this.activeToolView.draw(toolImageGraphics);
+
+			let analyticsImageGraphics = this.activeToolModel.getAnalyticsGraphics();
+			this.activeAnalysisView.draw(analyticsImageGraphics);
+		}
+	}
+
+	drawAnalysis(event) {
+		if(this.activeToolModel) {
+			let analyticsImageGraphics = this.activeToolModel.getAnalyticsGraphics();
+			this.activeAnalysisView.draw(analyticsImageGraphics);
 		}
 	}
 
@@ -302,7 +344,7 @@ class IrAnalysisController extends EventEmitter{
 		}
 	}
 	mouseMove(event) {
-		if(this.activeToolModel) {
+		if(this.activeToolModel && this.activeThermalArrayModel) {
 			let arrayLoc = calcArrayLocfromPixelLoc(
 					event.offsetX, event.offsetY,
 					this.activeThermalArrayModel.arrayWidth(),
@@ -329,7 +371,7 @@ class AnalysisTool extends EventEmitter{
 	mouseMove(pixelX, pixelY) {;}
 	keyboard(key) {;}
 	setArray(thermalArray) {;}
-	getToolImage() {return [];}
+	getToolGraphics() {return [];}
 }
 
 class PointerTool extends AnalysisTool {
@@ -343,6 +385,7 @@ class PointerTool extends AnalysisTool {
 		this.dragging=false;
 		this.thermalArray=null;
 		this.analytics={minTemp:{},maxTemp:{},x:0,y:0,tArray:[],boxW:0,boxH:0};
+		this.histNumBins=10;
 	}
 
 	mouseWheel(deltaX, deltaY) {
@@ -375,7 +418,7 @@ class PointerTool extends AnalysisTool {
 			{
 				this.mouseX=mouseX;
 				this.mouseY=mouseY;
-				this.getCursorAnalytics();
+				this.calculateAnalytics();
 				this.emit('draw',{});
 			}
 		}
@@ -385,16 +428,11 @@ class PointerTool extends AnalysisTool {
 		this.calculateAnalytics();
 		this.emit('draw',{});
 	}
-
 	calculateAnalytics() {
 		if(this.mouseX===null || this.mouseY===null) {
 			this.mouseY=Math.floor(this.thermalArray.length/2);
 			this.mouseX=Math.floor(this.thermalArray[0].length/2);
 		}
-		this.getCursorAnalytics();
-	}
-
-	getCursorAnalytics() {
 		const x0 = this.mouseX-this.boxWidth;
 		const x1 = this.mouseX+this.boxWidth;
 		const y0 = this.mouseY-this.boxHeight;
@@ -410,10 +448,14 @@ class PointerTool extends AnalysisTool {
 			x: -1,
 			y: -1
 		};
+		let sumTemps=0;
+		let numTemps=0;
 		for (let i = 0; i < cursorThermalArray.length; i++) {
 			for (let j = 0; j < cursorThermalArray[i].length; j++) {
 				const currentTemp = cursorThermalArray[i][j];
 				if (typeof currentTemp === 'number') {
+					sumTemps += currentTemp;
+					numTemps += 1;
 					if (currentTemp < minTemp.t) {
 						minTemp.t = currentTemp;
 						minTemp.x = j+x0;
@@ -429,6 +471,7 @@ class PointerTool extends AnalysisTool {
 		}
 		this.analytics.minTemp=minTemp;
 		this.analytics.maxTemp=maxTemp;
+		this.analytics.avgTemp={t:sumTemps/numTemps};
 		this.analytics.tArray=cursorThermalArray;
 		this.analytics.boxW=this.boxWidth;
 		this.analytics.boxH=this.boxHeight;
@@ -437,7 +480,7 @@ class PointerTool extends AnalysisTool {
 		this.analytics.thermalArray = this.thermalArray;
 	}
 
-	getToolImage() {
+	getToolGraphics() {
 		let toolImageGraphics=[];
 		//Inner box
 		let centerBox={type:'box', 
@@ -462,17 +505,59 @@ class PointerTool extends AnalysisTool {
 		toolImageGraphics.push(maxBox);
 		return toolImageGraphics;
 	}
+
+	getAnalyticsGraphics() {
+		let analyticsGraphics=[];
+
+		//Create histogram information
+		//Flatten the 2D array
+		let histogramArray=[];
+		const tempArray = this.analytics.tArray;
+		for (let i = 0; i < tempArray.length; i++) {
+			for (let j = 0; j < tempArray[i].length; j++) {
+				if (typeof tempArray[i][j] === 'number') {
+					histogramArray.push(tempArray[i][j])
+				}
+			}
+		}
+		// Calculate min and max values
+		const histMin = Math.min(...histogramArray);
+		const histMax = Math.max(...histogramArray);
+		// Calculate bin size
+		const binSize = (histMax - histMin) / this.histNumBins;
+		// Initialize an array for bin counts
+		let histBins = new Array(this.histNumBins).fill(0);
+		// Populate histBins
+		histogramArray.forEach(value => {
+				const binIndex = Math.min(
+						Math.floor((value - histMin) / binSize), 
+						this.numBins - 1);
+				histBins[binIndex]++;
+		});
+		// Create colors for the bins
+		let binColors = new Array(this.histNumBins).fill('rgb(0,0,0)');
+		// Normalize histBins to fraction
+		histBins = histBins.map(bin => bin / histogramArray.length);
+		//Complete the instruction
+		let histogram={type:'histogram', 
+				histBins:histBins, binSize:binSize,
+				histMin:histMin, histMax:histMax,
+				binColors:binColors};
+		//Add scalar text values
+		let analysisInfo={type:'analysisInfo',
+				min:this.analytics.minTemp.t,
+				max:this.analytics.maxTemp.t,
+				avg:this.analytics.avgTemp.t};
+		analyticsGraphics.push(histogram);
+		analyticsGraphics.push(analysisInfo);
+		return analyticsGraphics;
+	}
 }
 
 class CanvasGraphicsView extends EventEmitter{
 	constructor(canvasId) {
 		super();
 		this.canvas = document.getElementById(canvasId);
-	}
-
-	setCanvas(canvasId) {
-		this.canvas = document.getElementById(canvasId);
-		this.emit('draw',{});
 	}
 
 	canvasWidth() {
@@ -526,8 +611,8 @@ class CanvasGraphicsView extends EventEmitter{
 			canvasCtx.strokeRect(
 				((boxX-boxW)*pixelScaleX)-Math.floor(boxStroke/2), 
 				((boxY-boxH)*pixelScaleY)-Math.floor(boxStroke/2), 
-				(((2*boxW)+1)*pixelScaleX)+Math.floor(boxStroke/2), 
-				(((2*boxH)+1)*pixelScaleY)+Math.floor(boxStroke/2));
+				(((2*boxW)+1)*pixelScaleX)+boxStroke, 
+				(((2*boxH)+1)*pixelScaleY)+boxStroke);
 	}
 
 	drawPixelArray(instruction) {
@@ -573,6 +658,146 @@ class CanvasGraphicsView extends EventEmitter{
 class ThermalImageView extends CanvasGraphicsView {}
 
 class ToolView extends CanvasGraphicsView {}
+
+class AnalysisView extends EventEmitter{
+	constructor(divId) {
+		super();
+		this.div = document.getElementById(divId);
+		this.template = document.getElementById("id_genericAnalysisTemplate");
+	}
+
+	display() {
+		this.div.innerHTML = this.template.innerHTML;
+		this.canvas = document.getElementById("id_analysisCanvas");
+		this.minSpan = document.getElementById("id_analysisMin");
+		this.maxSpan = document.getElementById("id_analysisMax");
+		this.avgSpan = document.getElementById("id_analysisAvg");
+		this.emit('draw',{});
+	}
+
+	hide() {
+		this.div.innerHTML = "";
+	}
+
+	divWidth() {
+		return this.div.offsetWidth;
+	}
+
+	divHeight() {
+		return this.div.offsetHeight;
+	}
+
+	setSize(divWidth, divHeight) {
+		if(this.div.offsetWidth!=divWidth ||
+				this.div.offsetHeight!=divHeight) {
+			this.div.style.width = divWidth+"px";
+			this.div.style.height = divHeight+"px";
+			this.emit('draw',{});
+		}
+	}
+
+	clearCanvas() {
+		const canvasCtx = this.canvas.getContext('2d');
+		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
+	}
+
+	drawHistogram(instruction) {
+		return;
+		const boxX = instruction.x;
+		const boxY = instruction.y;
+		const boxW = instruction.w;
+		const boxH = instruction.h;
+
+		const boxColor = instruction.color;
+		const pixelScaleX = instruction.pixelScale.x;
+		const pixelScaleY = instruction.pixelScale.y;
+		const canvasHeight = this.canvas.height;
+		const canvasWidth = this.canvas.width;
+		const canvasCtx = this.canvas.getContext('2d');
+
+
+		const canvasCtx = this.canvas.getContext('2d');
+		// Determine the Yscale
+		const yMax = (Math.ceil(Math.max(...bins) / 0.2) * 0.2)
+		const yScale = yHeight / yMax;
+
+		
+		// Clear canvas
+		canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+		
+		// Calculate bin width in canvas space
+		const binWidth = xWidth / binCount;
+		
+		// Draw Y Axis
+		canvasCtx.fillText(yMax.toFixed(1),0,0+10);
+		canvasCtx.fillText((yMax/2).toFixed(1),0,yHeight/2)
+
+		// Draw histogram
+		bins.forEach((bin, index) => {
+				const height = bin * yScale;
+				const x = (index * binWidth)+xAxisOffset;
+				const y = yHeight - height;
+				
+				canvasCtx.fillRect(x, y, binWidth - 2, height); // -2 for a small gap between bins
+				
+				// Draw x-axis labels
+				canvasCtx.fillText((minValue + binSize * index).toFixed(1), x, canvas.height);
+				if (index === binCount - 1) {
+						// Add the last label
+						canvasCtx.fillText((minValue + binSize * (index + 1)).toFixed(1), x + (binWidth/2), canvas.height);
+				}
+		});
+	}
+
+	drawProfile(instruction) {
+		const pixelArray = instruction.pixelArray;
+		const pixelScaleX = instruction.pixelScale.x;
+		const pixelScaleY = instruction.pixelScale.y;
+		const arrayHeight = pixelArray.length;
+		const arrayWidth = pixelArray[0].length;
+		const canvasHeight = this.canvas.height;
+		const canvasWidth = this.canvas.width;
+		const canvasCtx = this.canvas.getContext('2d');
+
+		//Render each element of the array as a rectangle
+		//Rectangle has sides according to widthpixelscale / heightpixelscale
+		for (let y = 0; y < arrayHeight; y++) {
+			for (let x = 0; x < arrayWidth; x++) {
+				const pixelColor = pixelArray[y][x];
+				canvasCtx.fillStyle = pixelColor;
+				canvasCtx.fillRect(
+						x*pixelScaleX, 
+						y*pixelScaleY, 
+						pixelScaleX, 
+						pixelScaleY);
+			}
+		}
+	}
+
+	drawAnalysisInfo(instruction) {
+		this.minSpan.innerHTML = instruction.min;
+		this.maxSpan.innerHTML = instruction.max;
+		this.avgSpan.innerHTML = instruction.avg;
+	}
+
+	draw(drawInstructions) {
+		console.log(drawInstructions);
+		this.clearCanvas();
+		for (let instruction of drawInstructions) {
+			switch(instruction.type) {
+				case 'histogram':
+					this.drawHistogram(instruction);
+					break;
+				case 'profile':
+					this.drawProfile(instruction);
+					break;
+				case 'analysisInfo':
+					this.drawAnalysisInfo(instruction);
+					break;
+			}
+		}
+	}
+}
 
 class ThermalArrayModel extends EventEmitter{
 	constructor() {
@@ -1073,6 +1298,7 @@ function concatenateUint8Arrays(...arrays) {
 }
 
 function calcCanvasSize(arrayWidth, arrayHeight, divWidth, divHeight) {
+	console.log(`Calc canvas size ${arrayWidth} ${arrayHeight} ${divWidth} ${divHeight}`);
 	const newHeight = Math.floor(divHeight/arrayHeight)*arrayHeight;
 	const newWidth = Math.floor(divWidth/arrayWidth)*arrayWidth;
 	return {width:newWidth, height:newHeight}
@@ -1082,7 +1308,7 @@ function calcGraphicPixelScale(drawInstructions, arrayWidth, arrayHeight,
 	const pixelScaleX = Math.floor(canvasWidth/arrayWidth);
 	const pixelScaleY = Math.floor(canvasHeight/arrayHeight);
 	for (let instruction of drawInstructions) {
-		instruction.pixelScale={x:pixelScaleY, y:pixelScaleY};
+		instruction.pixelScale={x:pixelScaleX, y:pixelScaleY};
 	}
 	return drawInstructions;
 }
@@ -1230,6 +1456,7 @@ class ViridisPalette extends ColorPaletteModel{
 	let toolModel = null;
 	let colorPaletteModel = null;
 	let irAnalysisController = null;
+	let analysisView = null;
 
 	function startup() {
 		console.log("startup")
@@ -1237,6 +1464,7 @@ class ViridisPalette extends ColorPaletteModel{
 		toolView = new ToolView("id_toolCanvas");
 		toolModel = new PointerTool();
 		colorPaletteModel = new ViridisPalette();
+		analysisView = new AnalysisView("id_analysisContainer")
 		irAnalysisController = new IrAnalysisController(
 				"id_thermalCanvasContainer",
 				"id_thermalCanvasSizeContainer");
@@ -1244,6 +1472,7 @@ class ViridisPalette extends ColorPaletteModel{
 		irAnalysisController.setActiveThermalImageView(thermalImageView);
 		irAnalysisController.setActiveToolModel(toolModel);
 		irAnalysisController.setActiveToolView(toolView);
+		irAnalysisController.setActiveAnalysisView(analysisView);
 	}
 
 	function handleFileUpload() {
@@ -1297,7 +1526,7 @@ class ViridisPalette extends ColorPaletteModel{
 						<canvas class="thermalcanvas-element toolCanvas" id="id_toolCanvas"></canvas>
 					</div>
 				</div>
-				<div class="measurements-container">
+				<div class="analysis-container" id="id_analysisContainer">
 				</div>
 			</div>
 
@@ -1312,6 +1541,17 @@ class ViridisPalette extends ColorPaletteModel{
 			</div>
 		</div>
 	</div>
+
+	<template id="id_genericAnalysisTemplate">
+		<div class="analysiscanvas-container">
+			<canvas class="analysisCanvas" id="id_analysisCanvas"></canvas>
+		</div>
+		<div class="analysisinfo-container">
+			Average:<span class="analysisText" id="id_analysisAvg"></span><br>
+			Minimum:<span class="analysisText" id="id_analysisMin"></span><br>
+			Maximum:<span class="analysisText" id="id_analysisMax"></span><br>
+		</div>
+	</template>
 </body>
 </html>
 

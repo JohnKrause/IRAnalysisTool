@@ -222,7 +222,6 @@ class EventEmitter {
 	constructor() {
 		this.events = {};
 	}
-
 	addEventListener(event, listener) {
 		if (!this.events[event]) {
 			this.events[event] = [];
@@ -231,16 +230,12 @@ class EventEmitter {
 				this.events[event].push(listener);
 		}
 	}
-
-	removeEventListener(event, listener) {
-		if (this.events[event]) {
-			const index = this.events[event].indexOf(listener);
-			if (index !== -1) {
-					this.events[event].splice(index, 1);
-			}
-		}
-	}
-
+  removeEventListener(event, listener) {
+    if (!this.events[event]) {
+        return; // No such event registered
+    }
+    this.events[event] = this.events[event].filter(cb => cb !== listener);
+  }
 	emit(type, event) {
 		if (this.events[type]) {
 			this.events[type].forEach(listener => {
@@ -251,9 +246,9 @@ class EventEmitter {
 }
 
 class FileInstanceView extends EventEmitter{
-	constructor(thermalArrayModel, fileListId) {
+	constructor(thermalArray, fileListId) {
 		super();
-		this.thermalArrayModel=thermalArrayModel;
+		this.thermalArray=thermalArray;
 		this.fileList = document.getElementById(fileListId);
 		this.elementDiv = null;
 		this.elementImage = null;
@@ -269,33 +264,32 @@ class FileInstanceView extends EventEmitter{
 			this.fileList.appendChild(fileInstanceElement)
 			this.elementDiv = fileInstanceElement;
 			this.elementImage = fileInstanceElement.querySelector("#id_instanceImage");
-			this.elementImage.addEventListener('click', this.select.bind(this));
-			this.elementImage.src = this.thermalArrayModel.getThermalPreview();
+			this.elementImage.addEventListener('click', this.select);
+			this.elementImage.src = this.thermalArray.getThermalPreview();
 			this.elementName = fileInstanceElement.querySelector("#id_instanceName");
-			this.elementName.value = this.thermalArrayModel.name;
-			this.elementName.addEventListener('change', this.rename.bind(this));
+			this.elementName.value = this.thermalArray.name;
+			this.elementName.addEventListener('change', this.rename);
 			this.btnDelete = fileInstanceElement.querySelector("#id_instanceDelete");
-			this.btnDelete.addEventListener('click', this.delete.bind(this));
+			this.btnDelete.addEventListener('click', this.delete);
 			this.rendered=true;
 		}
 	}
 	removeElements() {
 		if(this.rendered) {
-			this.elementImage.removeEventListener('click', this.select.bind(this));
-			this.elementName.removeEventListener('change', this.rename.bind(this));
-			this.btnRename.removeEventListener('click', this.rename.bind(this));
-			this.btnDelete.removeEventListener('click', this.delete.bind(this));
+			this.elementImage.removeEventListener('click', this.select);
+			this.elementName.removeEventListener('change', this.rename);
+			this.btnDelete.removeEventListener('click', this.delete);
 			this.fileList.removeChild(this.elementDiv);
-			this.rendered=true;
+			this.rendered=false;
 		}
 	}
-	rename() {
-		this.thermalArrayModel.name=this.elementName.value;
+	rename = (event) => {
+		this.thermalArray.name=this.elementName.value;
 	}
-	delete() {
+	delete = (event) => {
 		this.emit("delete",{instance:this});
 	}
-	select() {
+	select = (event) => {
 		this.emit("select",{instance:this});
 	}
 }
@@ -319,23 +313,23 @@ class ToolInstanceView extends EventEmitter{
 			this.elementDiv = toolInstanceElement;
 			this.elementName = toolInstanceElement.querySelector("#id_instanceName");
 			this.elementName.value = this.toolModel.name;
-			this.elementName.addEventListener('change', this.rename.bind(this));
+			this.elementName.addEventListener('change', this.rename);
 			this.btnDelete = toolInstanceElement.querySelector("#id_instanceDelete");
-			this.btnDelete.addEventListener('click', this.delete.bind(this));
+			this.btnDelete.addEventListener('click', this.delete);
 			this.btnScope = toolInstanceElement.querySelector("#id_instanceScope");
-			this.btnScope.addEventListener('click', this.scope.bind(this));
+			this.btnScope.addEventListener('click', this.scope);
 			this.btnSelect = toolInstanceElement.querySelector("#id_instanceSelect");
-			this.btnSelect.addEventListener('click', this.select.bind(this));
+			this.btnSelect.addEventListener('click', this.select);
 			this.rendered = true;
 		}
 	}
 	removeElements() {
 		if(this.rendered){
-			this.elementName.removeEventListener('change', this.rename.bind(this));
-			this.btnDelete.removeEventListener('click', this.delete.bind(this));
-			this.btnSelect.removeEventListener('click', this.select.bind(this));
-			this.btnScope.removeEventListener('click', this.scope.bind(this));
-			this.fileList.removeChild(this.elementDiv);
+			this.elementName.removeEventListener('change', this.rename);
+			this.btnDelete.removeEventListener('click', this.delete);
+			this.btnSelect.removeEventListener('click', this.select);
+			this.btnScope.removeEventListener('click', this.scope);
+			this.toolList.removeChild(this.elementDiv);
 			this.rendered=false;
 		}
 	}
@@ -345,16 +339,16 @@ class ToolInstanceView extends EventEmitter{
 		}
 		this.toolList = document.getElementById(toolListId);
 	}
-	rename() {
+	rename = (event) => {
 		this.toolModel.name=this.elementName.value;
 	}
-	delete() {
+	delete = (event) =>  {
 		this.emit("delete",{instance:this});
 	}
-	select() {
+	select = (event) =>  {
 		this.emit("select",{instance:this});
 	}
-	scope() {
+	scope = (event) =>  {
 		this.emit("scope",{instance:this});
 	}
 }
@@ -370,112 +364,121 @@ class IrAnalysisController extends EventEmitter{
 
 		this.activeFileKey=null;
 		this.activeToolKey=null;
-		this.activeThermalArrayModel = null;
-		this.activeThermalImageView = null;
-		this.activeToolModel = null;
-		this.activeToolView = null;
-		this.activeAnalysisView = null;
-		this.activeColorPaletteModel = null;
+		this.activeTool = null;
+		this.activeThermalArray = null;
+		this.activeColorPalette = null;
 
-		window.addEventListener('resize',this.resizeWindow.bind(this));
-		this.canvasDiv.addEventListener('wheel',this.mouseWheel.bind(this));
-		this.canvasDiv.addEventListener('mouseup',this.mouseUp.bind(this));
-		this.canvasDiv.addEventListener('mousedown',this.mouseDown.bind(this));
-		this.canvasDiv.addEventListener('mousein',this.mouseIn.bind(this));
-		this.canvasDiv.addEventListener('mouseout',this.mouseOut.bind(this));
-		this.canvasDiv.addEventListener('mousemove',this.mouseMove.bind(this));
-		this.canvasDiv.addEventListener('keydown',this.keyboard.bind(this));
-	}
+		this.thermalImageView = null;
+		this.toolView = null;
+		this.analysisView = null;
 
-	setActiveThermalImageView(thermalImageView) {
-		if(this.activeThermalImageView) {
-			this.activeThermalImageView.removeEventListener('draw',
-					this.drawThermalImage.bind(this));
-		}
-		this.activeThermalImageView=thermalImageView;
-		this.activeThermalImageView.addEventListener('draw',
-				this.drawThermalImage.bind(this));
-		this.synchronizeEverything();
-	}
-
-	setActiveToolView(toolView) {
-		if(this.activeToolView) {
-			this.activeToolView.removeEventListener('draw',
-					this.drawTool.bind(this));
-		}
-		this.activeToolView=toolView;
-		this.activeToolView.addEventListener('draw',
-				this.drawTool.bind(this));
-		this.synchronizeEverything();
-	}
-
-	setActiveAnalysisView(analysisView) {
-		if(this.activeAnalysisView) {
-			this.activeAnalysisView.hide();
-			this.activeToolView.removeEventListener('draw',
-					this.drawAnalysis.bind(this));
-		}
-		this.activeAnalysisView=analysisView;
-		this.activeAnalysisView.display();
-		this.activeAnalysisView.addEventListener('draw',
-				this.drawAnalysis.bind(this));
-		this.synchronizeEverything();
-	}
-
-	setActiveToolModel(toolModel) {
-		if(this.activeToolModel) {
-			this.activeToolModel.removeEventListener('draw',
-					this.drawTool.bind(this));
-		}
-		this.activeToolModel=toolModel;
-		if(this.activeToolModel) {
-			this.activeToolModel.addEventListener('draw',
-					this.drawTool.bind(this));
-		}
-		this.synchronizeEverything();
-	}
-
-	setActiveThermalArrayModel(thermalArrayModel) {
-		if(this.activeThermalArrayModel) {
-			this.activeThermalArrayModel.removeEventListener('arraychange',
-					this.arrayChange.bind(this));
-		}
-		this.activeThermalArrayModel = thermalArrayModel;
-		this.activeThermalArrayModel.addEventListener('arraychange',
-				this.arrayChange.bind(this));
-		this.synchronizeEverything();
-	}
-
-	setActiveColorPaletteModel(colorPaletteModel) {
-		if(this.activeColorPaletteModel) {
-			this.activeColorPaletteModel.removeEventListener('palettechange',
-					this.paletteChange.bind(this));
-		}
-		this.activeColorPaletteModel = colorPaletteModel;
-		this.activeColorPaletteModel.addEventListener('palettechange',
-				this.paletteChange.bind(this));
-		this.synchronizeEverything();
+		window.addEventListener('resize',this.resizeWindow);
+		this.canvasDiv.addEventListener('wheel',this.mouseWheel);
+		this.canvasDiv.addEventListener('mouseup',this.mouseUp);
+		this.canvasDiv.addEventListener('mousedown',this.mouseDown);
+		this.canvasDiv.addEventListener('mousein',this.mouseIn);
+		this.canvasDiv.addEventListener('mouseout',this.mouseOut);
+		this.canvasDiv.addEventListener('mousemove',this.mouseMove);
+		this.canvasDiv.addEventListener('keydown',this.keyboard);
 	}
 
 	synchronizeEverything() {
-		//Make sure tool has the correct thermal array
-		if(this.activeThermalArrayModel && this.activeToolModel) {
-			const thermalArray = this.activeThermalArrayModel.getThermalArray();
-			this.activeToolModel.setArray(thermalArray);
-		}
-		//Make sure thermal array has correct color palette
-		if(this.activeColorPaletteModel) {
-			if(this.activeThermalArrayModel) {
-				this.activeThermalArrayModel.setActiveColorPaletteModel(
-						this.activeColorPaletteModel);
+		console.log("synch");
+		if(this.activeFileKey) {
+			//Configure the active tool if one is selected
+			const activeToolKey=this.fileInstances[this.activeFileKey].activeToolKey;
+			if(activeToolKey) {
+				this.activateToolModel(this.toolInstances[activeToolKey].toolModel);
+			} else {
+				this.activateToolModel(null);
 			}
-			if(this.activeToolModel) {
-				this.activeToolModel.setActiveColorPaletteModel(
-						this.activeColorPaletteModel);
+			//Set the correct thermal array model
+			let thermalArray=
+					this.fileInstances[this.activeFileKey].thermalArray;
+			if(thermalArray) {
+				this.activateThermalArray(thermalArray);
+			} else {
+				this.activeThermalArray(null);
+			}
+			//Set the correct color palettes
+			if(this.activeThermalArray) {
+				this.activeThermalArray.activateColorPalette(this.activeColorPalette);
+			}
+			if(this.activeTool) {
+				this.activeTool.activateColorPalette(this.activeColorPalette);
+			}
+			//Synchronize the tool and thermal array
+			if(this.activeTool && this.activeThermalArray) {
+				this.activeTool.setArray(this.activeThermalArray.getThermalArray());
 			}
 		}
-		//Make sure the canvases are the correct size
+		//Recalculate canvas sizes
 		this.resizeWindow({});
+	}
+	setThermalImageView(thermalImageView) {
+		if(this.thermalImageView) {
+			this.thermalImageView.removeEventListener('draw',
+					this.drawThermalImage);
+		}
+		this.thermalImageView=thermalImageView;
+		this.thermalImageView.addEventListener('draw',
+				this.drawThermalImage);
+		this.synchronizeEverything();
+	}
+	setToolView(toolView) {
+		if(this.toolView) {
+			this.toolView.removeEventListener('draw',
+					this.drawTool);
+		}
+		this.toolView=toolView;
+		this.toolView.addEventListener('draw',
+				this.drawTool);
+		this.synchronizeEverything();
+	}
+	setAnalysisView(analysisView) {
+		if(this.analysisView) {
+			this.analysisView.hide();
+			this.toolView.removeEventListener('draw',
+					this.drawAnalysis);
+		}
+		this.analysisView=analysisView;
+		this.analysisView.display();
+		this.analysisView.addEventListener('draw',
+				this.drawAnalysis);
+		this.synchronizeEverything();
+	}
+	activateColorPalette(colorPaletteModel) {
+		if(this.activeColorPalette) {
+			this.activeColorPalette.removeEventListener('palettechange',
+					this.paletteChange);
+		}
+		this.activeColorPalette = colorPaletteModel;
+		this.activeColorPalette.addEventListener('palettechange',
+				this.paletteChange);
+	}
+	activateToolModel(toolModel) {
+		if(this.activeTool) {
+			console.log("Remove tool");
+			this.activeTool.removeEventListener('draw',
+					this.drawTool);
+		}
+		this.activeTool=toolModel;
+		if(this.activeTool) {
+			console.log("add tool");
+			this.activeTool.addEventListener('draw',
+					this.drawTool);
+		}
+	}
+	activateThermalArray(thermalArrayModel) {
+		if(this.activeThermalArray) {
+			console.log("remove thermal array");
+			this.activeThermalArray.removeEventListener('arraychange',
+					this.arrayChange);
+		}
+		console.log("add thermal array");
+		this.activeThermalArray = thermalArrayModel;
+		this.activeThermalArray.addEventListener('arraychange',
+				this.arrayChange);
 	}
 
 	addFileInstanceView(fileInstanceView) {
@@ -484,79 +487,73 @@ class IrAnalysisController extends EventEmitter{
 			fileKey++;
 		}
 		fileInstanceView.fileKey=fileKey;
-		this.fileInstances[fileKey]={
-				view:fileInstanceView,
-				activeToolKey:null,
-				localToolKeys:[]};
+		fileInstanceView.localToolKeys=[];
+		fileInstanceView.activeToolKey=null;
+		this.fileInstances[fileKey]=fileInstanceView;
 		this.listenFileInstanceView(fileInstanceView);
 		fileInstanceView.renderElements();
 	}
-	deleteFileInstanceView(event) {
+	listenFileInstanceView(fileInstanceView) {
+		fileInstanceView.addEventListener('select',
+				this.selectFileInstanceView);
+		fileInstanceView.addEventListener('delete',
+				this.deleteFileInstanceView);
+	}
+	unlistenFileInstanceView(fileInstanceView) {
+		fileInstanceView.removeEventListener('select',
+				this.selectFileInstanceView);
+		fileInstanceView.removeEventListener('delete',
+				this.deleteFileInstanceView);
+	}
+	deleteFileInstanceView = (event) => {
 		//Remove the file instance view
 		this.unlistenFileInstanceView(event.instance);
 		event.instance.removeElements();
 		//Remove all the associated instance tools
-		let fileKey = event.instance.fileKey;
-		let currentInstanceToolViews = this.toolInstances[fileKey];
-		for(let i=0; i<currentInstanceToolViews.length; i++) {
-			this.unlistenToolInstanceView(currentInstanceToolViews[i]);
-			currentInstanceToolViews[i].removeElements();
-		}
+		let localToolKeys = event.instance.localToolKeys;
+		localToolKeys.forEach((toolKey) => {
+			this.unlistenToolInstanceView(this.toolInstances[toolKey]);
+			delete this.toolInstances[toolKey];
+		});
 		//Incase this was our active file
-		if(this.activeFileKey == fileKey) {
+		if(this.activeFileKey == event.instance.fileKey) {
 			this.activeFileKey = null;
-			this.activeThermalArrayModel = null;
-			this.activeToolModel = null;
 		}
-		delete this.fileInstances[fileKey];
-		delete this.toolInstances[fileKey];
+		console.log(event.instance.fileKey);
+		delete this.fileInstances[event.instance.fileKey];
+		console.log(this.fileInstances);
 		this.synchronizeEverything();
 	}
-	selectFileInstanceView(event) {
+	selectFileInstanceView = (event) =>  {
+		//Skip if this is already active instance
+		if(this.activeFileKey == event.instance.fileKey) {
+			return;
+		}
 		//Deactive currently selected file instance if there is one
 		if(this.activeFileKey) {
 			//unlisten and hide all local tools
 			const previousLocalToolKeys = 
 					this.fileInstances[this.activeFileKey].localToolKeys;
-			previousLocalToolKeys.forEach((key) => {
-				this.unlistenToolInstanceView(this.toolInstances[key]);
-				this.toolInstances[key].removeElements();
+			previousLocalToolKeys.forEach((toolKey) => {
+				this.unlistenToolInstanceView(this.toolInstances[toolKey]);
+				this.toolInstances[toolKey].removeElements();
 			});
 		}
 		//Activate the new file instance
-		let fileKey = event.instance.fileKey;
+		this.activeFileKey = event.instance.fileKey;
 		//Listen and render all local tools
 		const currentLocalToolKeys = 
-				this.fileInstances[fileKey].localToolKeys;
-		currentLocalToolKeys.forEach((key) => {
-			this.listenToolInstanceView(this.toolInstances[key]);
-			this.toolInstances[key].renderElements();
+				this.fileInstances[this.activeFileKey].localToolKeys;
+		currentLocalToolKeys.forEach((toolKey) => {
+			this.listenToolInstanceView(this.toolInstances[toolKey]);
+			this.toolInstances[toolKey].renderElements();
 		});
-		//Update thermal array
-		this.setActiveThermalArrayModel(event.instance.thermalArrayModel);
-		//Set the appropriate active tool model
-		let activeToolKey = this.fileInstances[fileKey].activeToolKey;
-		this.setActiveToolModel(this.toolInstances[activeToolKey]);
 		this.synchronizeEverything();
-	}
-	listenFileInstanceView(fileInstanceView) {
-		fileInstanceView.addEventListener('select',
-				this.selectFileInstanceView.bind(this));
-		fileInstanceView.addEventListener('delete',
-				this.deleteFileInstanceView.bind(this));
-	}
-	unlistenFileInstanceView(fileInstanceView) {
-		fileInstanceView.removeEventListener('select',
-				this.selectFileInstance.bind(this));
-		fileInstanceView.removeEventListener('delete',
-				this.deleteFileInstance.bind(this));
 	}
 
 	addToolInstanceView(toolInstanceView, globalTool=true) {
 		//Check if valid to add a local tool currently
-		if(!globalTool && !this.activeFileKey) {
-			return;
-		}
+		if(!globalTool && !this.activeFileKey) {return;}
 		//Add the tool
 		let toolKey=1;
 		while(this.toolInstances[toolKey] !== undefined) {
@@ -571,33 +568,56 @@ class IrAnalysisController extends EventEmitter{
 			toolInstanceView.changeToolList('id_availLocalTools');
 			this.fileInstances[this.activeFileKey].localToolKeys.push(toolKey);
 		}
-		toolInstanceView.renderElements();
 		this.listenToolInstanceView(toolInstanceView);
+		toolInstanceView.renderElements();
 	}
-	selectToolInstanceView(event) {
-		this.setActiveToolModel(event.instance.toolModel);
+	listenToolInstanceView(toolInstanceView) {
+		toolInstanceView.addEventListener('select',
+				this.selectToolInstanceView);
+		toolInstanceView.addEventListener('delete',
+				this.deleteToolInstanceView);
+		toolInstanceView.addEventListener('scope',
+				this.scopeToolInstanceView);
 	}
-	deleteToolInstanceView(event) {
+	unlistenToolInstanceView(toolInstanceView) {
+		toolInstanceView.removeEventListener('select',
+				this.selectToolInstanceView);
+		toolInstanceView.removeEventListener('delete',
+				this.deleteToolInstanceView);
+		toolInstanceView.removeEventListener('scope',
+				this.scopeToolInstanceView);
+	}
+	selectToolInstanceView = (event) =>  {
+		if(this.activeFileKey) {
+			//Don't synchronize unless this is a change in tool
+			if(this.fileInstances[this.activeFileKey].activeToolKey != 
+					event.instance.toolKey) {
+				this.fileInstances[this.activeFileKey].activeToolKey=
+						event.instance.toolKey;
+				this.synchronizeEverything();
+			}
+		}
+	}
+	deleteToolInstanceView = (event) =>  {
+		//Remove the tool instance view
 		this.unlistenToolInstanceView(event.instance);
 		event.instance.removeElements();
-		let toolKey = event.instance.toolKey;
 		//Remove all references to this tool from file instances
+		let toolKey = event.instance.toolKey;
 		for(let fileKey in this.fileInstances) {
-			if(this.fileInstances[fileKey].activeToolKey == toolKey) {
-				this.fileInstances[fileKey].activeToolKey = null;
-			}
+			//Remove this tool from local tool key list(s)
 			this.fileInstances[fileKey].localToolKeys = 
 					this.fileInstances[fileKey].localToolKeys.filter(
 							localToolKey => localToolKey !== toolKey);
-		}
-		if(this.activeToolKey == toolKey) {
-			this.activeToolKey = null;
-			this.setActiveToolModel(null);
+			//Make sure this is not the active tool of any file instance
+			if(this.fileInstances[fileKey].activeToolKey == toolKey) {
+				this.fileInstances[fileKey].activeToolKey = null;
+			}
 		}
 		delete this.toolInstances[toolKey];
-		synchronizeEverything();
+		this.synchronizeEverything();
 	}
-	scopeToolInstanceView(event) {
+	scopeToolInstanceView = (event) =>  {
 		const toolKey = event.instance.toolKey;
 		if(event.instance.globalTool) {
 			//Can only go from global -> local is there is an active file
@@ -609,9 +629,10 @@ class IrAnalysisController extends EventEmitter{
 				event.instance.renderElements();
 				//Add this tool as a local tool of active file
 				this.fileInstances[this.activeFileKey].localToolKeys.push(toolKey);
-				//Remove references to this tool from other files
+				//Remove references to this tool from other non-active files
 				for(let fileKey in this.fileInstances) {
-					if(this.fileInstances[fileKey].activeToolKey == toolKey) {
+					if(fileKey != this.activeFileKey 
+						&& this.fileInstances[fileKey].activeToolKey == toolKey) {
 						this.fileInstances[fileKey].activeToolKey = null;
 					}
 				}
@@ -628,138 +649,115 @@ class IrAnalysisController extends EventEmitter{
 							localToolKey => localToolKey !== toolKey);
 		}
 	}
-	listenToolInstanceView(toolInstanceView) {
-		toolInstanceView.addEventListener('select',
-				this.selectToolInstanceView.bind(this));
-		toolInstanceView.addEventListener('delete',
-				this.deleteToolInstanceView.bind(this));
-		toolInstanceView.addEventListener('scope',
-				this.scopeToolInstanceView.bind(this));
-	}
-	unlistenToolInstanceView(toolInstanceView) {
-		toolInstanceView.removeEventListener('select',
-				this.selectToolInstanceView.bind(this));
-		toolInstanceView.removeEventListener('delete',
-				this.deleteToolInstanceView.bind(this));
-		toolInstanceView.removeEventListener('scope',
-				this.scopeToolInstanceView.bind(this));
-	}
 
-
-	drawThermalImage(event) {
-		if(this.activeThermalArrayModel) {
-			let thermalImageGraphics = this.activeThermalArrayModel.getThermalImage();
+	drawThermalImage = (event) =>  {
+		if(this.activeThermalArray) {
+			let thermalImageGraphics = this.activeThermalArray.getThermalImage();
 			thermalImageGraphics = calcGraphicPixelScale(thermalImageGraphics, 
-					this.activeThermalArrayModel.arrayWidth(),
-					this.activeThermalArrayModel.arrayHeight(),
-					this.activeThermalImageView.canvasWidth(),
-					this.activeThermalImageView.canvasHeight());
-			this.activeThermalImageView.draw(thermalImageGraphics);
+					this.activeThermalArray.arrayWidth(),
+					this.activeThermalArray.arrayHeight(),
+					this.thermalImageView.canvasWidth(),
+					this.thermalImageView.canvasHeight());
+			this.thermalImageView.draw(thermalImageGraphics);
 		}
 	}
-
-	drawTool(event) {
-		if(this.activeToolModel) {
-			let toolImageGraphics = this.activeToolModel.getToolGraphics();
+	drawTool = (event) =>  {
+		if(this.activeTool) {
+			let toolImageGraphics = this.activeTool.getToolGraphics();
 			toolImageGraphics = calcGraphicPixelScale(toolImageGraphics, 
-					this.activeThermalArrayModel.arrayWidth(),
-					this.activeThermalArrayModel.arrayHeight(),
-					this.activeThermalImageView.canvasWidth(),
-					this.activeThermalImageView.canvasHeight());
-			this.activeToolView.draw(toolImageGraphics);
+					this.activeThermalArray.arrayWidth(),
+					this.activeThermalArray.arrayHeight(),
+					this.thermalImageView.canvasWidth(),
+					this.thermalImageView.canvasHeight());
+			this.toolView.draw(toolImageGraphics);
 
-			let analyticsImageGraphics = this.activeToolModel.getAnalyticsGraphics();
-			this.activeAnalysisView.draw(analyticsImageGraphics);
+			let analyticsImageGraphics = this.activeTool.getAnalyticsGraphics();
+			this.analysisView.draw(analyticsImageGraphics);
 		}
 	}
-
-	drawAnalysis(event) {
-		if(this.activeToolModel) {
-			let analyticsImageGraphics = this.activeToolModel.getAnalyticsGraphics();
-			this.activeAnalysisView.draw(analyticsImageGraphics);
+	drawAnalysis = (event) =>  {
+		if(this.activeTool) {
+			let analyticsImageGraphics = this.activeTool.getAnalyticsGraphics();
+			this.analysisView.draw(analyticsImageGraphics);
 		}
 	}
-
-	arrayChange(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.thermalArrayChange();
+	arrayChange = (event) => {
+		if(this.activeTool) {
+			this.activeTool.thermalArrayChange();
 		}
 	}
-
-	paletteChange(event) {
-		if(this.activeThermalArrayModel) {
-			this.activeThermalArrayModel.paletteChange();
+	paletteChange = (event) =>  {
+		if(this.activeThermalArray) {
+			this.activeThermalArray.paletteChange();
 		}
 	}
-
-	resizeWindow(event) {
+	resizeWindow = (event) =>  {
 		let arrayHeight = 50;
 		let arrayWidth = 50;
-		if(this.activeThermalArrayModel) {
-			arrayHeight = this.activeThermalArrayModel.arrayHeight();
-			arrayWidth = this.activeThermalArrayModel.arrayWidth();
+		if(this.activeThermalArray) {
+			arrayHeight = this.activeThermalArray.arrayHeight();
+			arrayWidth = this.activeThermalArray.arrayWidth();
 		}
 		const divHeight = this.containerDiv.offsetHeight-40;
 		const divWidth = this.containerDiv.offsetWidth-40;
 		const canvasSize = calcCanvasSize(arrayWidth, arrayHeight, divWidth, divHeight);
 		this.canvasDiv.style.width = (canvasSize.width+30)+'px';
 		this.canvasDiv.style.height = (canvasSize.height+30)+'px';
-		if(this.activeThermalImageView) {
-			this.activeThermalImageView.setSize(canvasSize.width, canvasSize.height);
+		if(this.thermalImageView) {
+			this.thermalImageView.setSize(canvasSize.width, canvasSize.height);
 		}
-		if(this.activeToolView) {
-			this.activeToolView.setSize(canvasSize.width, canvasSize.height);
+		if(this.toolView) {
+			this.toolView.setSize(canvasSize.width, canvasSize.height);
 		}
-		if(this.activeAnalysisView) {
-			this.activeAnalysisView.resizeUpdate();
-		}
-	}
-
-	mouseWheel(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.mouseWheel(event.deltaX, event.deltaY);
+		if(this.analysisView) {
+			this.analysisView.resizeUpdate();
 		}
 	}
-	mouseUp(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.mouseUp();
+	mouseWheel = (event) =>  {
+		if(this.activeTool) {
+			this.activeTool.mouseWheel(event.deltaX, event.deltaY);
 		}
 	}
-	mouseDown(event) {
-		if(this.activeToolModel && this.activeThermalArrayModel) {
+	mouseUp = (event) =>  {
+		if(this.activeTool) {
+			this.activeTool.mouseUp();
+		}
+	}
+	mouseDown = (event) =>  {
+		if(this.activeTool && this.activeThermalArray) {
 			let arrayLoc = calcArrayLocfromPixelLoc(
 					event.offsetX, event.offsetY,
-					this.activeThermalArrayModel.arrayWidth(),
-					this.activeThermalArrayModel.arrayHeight(),
-					this.activeThermalImageView.canvasWidth(),
-					this.activeThermalImageView.canvasHeight());
-			this.activeToolModel.mouseDown(arrayLoc.x, arrayLoc.y);
+					this.activeThermalArray.arrayWidth(),
+					this.activeThermalArray.arrayHeight(),
+					this.thermalImageView.canvasWidth(),
+					this.thermalImageView.canvasHeight());
+			this.activeTool.mouseDown(arrayLoc.x, arrayLoc.y);
 		}
 	}
-	mouseIn(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.mouseIn();
+	mouseIn = (event) =>  {
+		if(this.activeTool) {
+			this.activeTool.mouseIn();
 		}
 	}
-	mouseOut(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.mouseOut();
+	mouseOut = (event) =>  {
+		if(this.activeTool) {
+			this.activeTool.mouseOut();
 		}
 	}
-	mouseMove(event) {
-		if(this.activeToolModel && this.activeThermalArrayModel) {
+	mouseMove = (event) =>  {
+		if(this.activeTool && this.activeThermalArray) {
 			let arrayLoc = calcArrayLocfromPixelLoc(
 					event.offsetX, event.offsetY,
-					this.activeThermalArrayModel.arrayWidth(),
-					this.activeThermalArrayModel.arrayHeight(),
-					this.activeThermalImageView.canvasWidth(),
-					this.activeThermalImageView.canvasHeight());
-			this.activeToolModel.mouseMove(arrayLoc.x, arrayLoc.y);
+					this.activeThermalArray.arrayWidth(),
+					this.activeThermalArray.arrayHeight(),
+					this.thermalImageView.canvasWidth(),
+					this.thermalImageView.canvasHeight());
+			this.activeTool.mouseMove(arrayLoc.x, arrayLoc.y);
 		}
 	}
-	keyboard(event) {
-		if(this.activeToolModel) {
-			this.activeToolModel.keyboard();
+	keyboard = (event) =>  {
+		if(this.activeTool) {
+			this.activeTool.keyboard();
 		}
 	}
 }
@@ -775,12 +773,12 @@ class AnalysisTool extends EventEmitter{
 	keyboard(key) {;}
 	setArray(thermalArray) {;}
 	getToolGraphics() {return [];}
-	setActiveColorPaletteModel(colorPaletteModel) {
-		this.activeColorPaletteModel=colorPaletteModel;
+	activateColorPalette(colorPaletteModel) {
+		this.activeColorPalette=colorPaletteModel;
 		this.draw();
 	}
 	draw() {
-		if(this.activeColorPaletteModel && this.thermalArray) {
+		if(this.activeColorPalette && this.thermalArray) {
 			this.emit('draw',{});
 		}
 	}
@@ -789,7 +787,7 @@ class PointerTool extends AnalysisTool {
 	static name() {return "Pointer Tool";}
 	constructor() {
 		super();
-		this.activeColorPaletteModel=null;
+		this.activeColorPalette=null;
 		this.boxWidth=3;
 		this.boxHeight=3;
 		this.mouseX=null;
@@ -799,7 +797,6 @@ class PointerTool extends AnalysisTool {
 		this.analytics={};
 		this.histNumBins=15;
 	}
-
 	mouseWheel(deltaX, deltaY) {
 		if(deltaY < 0) {
 			this.boxWidth+=1;
@@ -891,7 +888,6 @@ class PointerTool extends AnalysisTool {
 		this.analytics.cursorY=this.mouseY;
 		this.analytics.thermalArray = this.thermalArray;
 	}
-
 	getToolGraphics() {
 		let toolImageGraphics=[];
 		//Inner box
@@ -917,7 +913,6 @@ class PointerTool extends AnalysisTool {
 		toolImageGraphics.push(maxBox);
 		return toolImageGraphics;
 	}
-
 	getAnalyticsGraphics() {
 		let analyticsGraphics=[];
 		//Create histogram information
@@ -955,7 +950,7 @@ class PointerTool extends AnalysisTool {
 			histBins[i].color = 'black';
 		}
 		//Create the gradient color array
-		const gradientArray = this.activeColorPaletteModel.getGradientArray(
+		const gradientArray = this.activeColorPalette.getGradientArray(
 				this.analytics.minTemp.t, this.analytics.maxTemp.t);
 		//compile the histogram instruction
 		analyticsGraphics.push({type:'histogram', 
@@ -986,7 +981,6 @@ class ProfileTool extends AnalysisTool {
 		this.analytics={};
 		this.histNumBins=10;
 	}
-
 	mouseWheel(deltaX, deltaY) {
 	}
 	mouseUp(mouseX, mouseY) {
@@ -1068,7 +1062,6 @@ class ProfileTool extends AnalysisTool {
 		this.analytics.cursorArray=profileThermalArray;
 		this.analytics.thermalArray = this.thermalArray;
 	}
-
 	getToolGraphics() {
 		let toolImageGraphics=[];
 		//highlight pixels along the line that aren't the min/max
@@ -1105,7 +1098,6 @@ class ProfileTool extends AnalysisTool {
 				color:'black', stroke:'normal', mode:'outer'});
 		return toolImageGraphics;
 	}
-
 	getAnalyticsGraphics() {
 		let analyticsGraphics=[];
 		let profileArray = []
@@ -1115,7 +1107,7 @@ class ProfileTool extends AnalysisTool {
 			profileArray.push({h:h, t:this.analytics.cursorArray[i].t});
 		}
 		profileArray=profileArray.sort((a,b) => a.h - b.h);
-		const gradientArray = this.activeColorPaletteModel.getGradientArray(
+		const gradientArray = this.activeColorPalette.getGradientArray(
 				this.analytics.minTemp.t, this.analytics.maxTemp.t);
 		//compile the histogram instruction
 		analyticsGraphics.push(
@@ -1135,15 +1127,12 @@ class CanvasGraphicsView extends EventEmitter{
 		super();
 		this.canvas = document.getElementById(canvasId);
 	}
-
 	canvasWidth() {
 		return this.canvas.width;
 	}
-
 	canvasHeight() {
 		return this.canvas.height;
 	}
-
 	setSize(canvasWidth, canvasHeight) {
 		if(this.canvas.width!=canvasWidth ||
 				this.canvas.height!=canvasHeight) {
@@ -1152,12 +1141,10 @@ class CanvasGraphicsView extends EventEmitter{
 			this.emit('draw',{});
 		}
 	}
-
 	clearCanvas() {
 		const canvasCtx = this.canvas.getContext('2d');
 		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
 	}
-
 	drawBox(instruction) {
 		const boxX = instruction.x;
 		const boxY = instruction.y;
@@ -1200,7 +1187,6 @@ class CanvasGraphicsView extends EventEmitter{
 				break;
 		}
 	}
-
 	drawPixelArray(instruction) {
 		const pixelArray = instruction.pixelArray;
 		const pixelScaleX = instruction.pixelScale.x;
@@ -1223,7 +1209,6 @@ class CanvasGraphicsView extends EventEmitter{
 			}
 		}
 	}
-
 	draw(drawInstructions) {
 		this.clearCanvas();
 		for (let instruction of drawInstructions) {
@@ -1239,10 +1224,8 @@ class CanvasGraphicsView extends EventEmitter{
 	}
 }
 class ThermalImageView extends CanvasGraphicsView {
-
 }
 class ToolView extends CanvasGraphicsView {
-
 }
 
 class AnalysisView extends EventEmitter{
@@ -1254,7 +1237,6 @@ class AnalysisView extends EventEmitter{
 		this.colorCanvas = document.createElement('canvas');
 		this.gap = 2;
 	}
-
 	display() {
 		this.div.innerHTML = this.template.innerHTML;
 		this.canvas = document.getElementById("id_analysisCanvas");
@@ -1266,19 +1248,15 @@ class AnalysisView extends EventEmitter{
 		this.maxSpan = document.getElementById("id_analysisMax");
 		this.avgSpan = document.getElementById("id_analysisAvg");
 	}
-
 	hide() {
 		this.div.innerHTML = "";
 	}
-
 	divWidth() {
 		return this.div.offsetWidth;
 	}
-
 	divHeight() {
 		return this.div.offsetHeight;
 	}
-
 	resizeUpdate() {
 		this.canvas.width = this.canvas.parentElement.clientWidth;
 		this.canvas.height = this.canvas.parentElement.clientHeight;
@@ -1288,7 +1266,6 @@ class AnalysisView extends EventEmitter{
 		this.colorCanvas.height = this.canvas.height;
 		this.emit('draw',{});
 	}
-
 	numberToFixedWidthString(number, mode="round") {
 		const absNumber = Math.abs(number);
 		let numStr = "";
@@ -1327,7 +1304,6 @@ class AnalysisView extends EventEmitter{
 		}
 		return {label:numStr, float:numFloat};
 	}
-
 	createGraphAxis(xMin, xMax, yMin, yMax, 
 			xTicks=0, xGridlines=0, yTicks=0, yGridlines=0) {
 		const canvasHeight = this.canvas.height;
@@ -1410,7 +1386,6 @@ class AnalysisView extends EventEmitter{
 		canvasCtx.stroke();
 		return {x0:x0, x1:x1, y0:y0, y1:y1};
 	}
-
 	drawHistogram(instruction) {
 		const canvasHeight = this.canvas.height;
 		const canvasWidth = this.canvas.width;
@@ -1483,7 +1458,6 @@ class AnalysisView extends EventEmitter{
 		colorCtx.globalCompositeOperation = 'source-over';
 		canvasCtx.drawImage(this.colorCanvas,0,0);
 	}
-
 	drawProfile(instruction) {
 		const canvasHeight = this.canvas.height;
 		const canvasWidth = this.canvas.width;
@@ -1561,13 +1535,11 @@ class AnalysisView extends EventEmitter{
 		colorCtx.globalCompositeOperation = 'source-over';
 		canvasCtx.drawImage(this.colorCanvas,0,0);
 	}
-
 	drawAnalysisInfo(instruction) {
 		this.minSpan.innerHTML = instruction.min;
 		this.maxSpan.innerHTML = instruction.max;
 		this.avgSpan.innerHTML = instruction.avg;
 	}
-
 	draw(drawInstructions) {
 		for (let instruction of drawInstructions) {
 			switch(instruction.type) {
@@ -1592,34 +1564,30 @@ class ThermalArrayModel extends EventEmitter{
 		this.name="";
 		this.thermalArray=[];
 		this.thermalFileModel = new ThermalFileModel();
-		this.activeColorPaletteModel = null;
+		this.activeColorPalette = null;
 	}
-
 	arrayWidth() {
 		return this.thermalArray[0].length;
 	}
-
 	arrayHeight() {
 		return this.thermalArray.length;
 	}
-
 	getThermalArray() {
 		return this.thermalArray;
 	}
-
 	getThermalImage() {
 		let thermalImageArray = [];
 		//Find min and max values of temperature array
 		if(this.thermalArray) {
-			this.activeColorPaletteModel.initializePalette(this.thermalArray);
+			this.activeColorPalette.initializePalette(this.thermalArray);
 			for (let row of this.thermalArray) {
 				let thermalRow =[]
 				for (let value of row) {
 					if (!isNaN(value)) {
 						thermalRow.push(
-								this.activeColorPaletteModel.getColorForValue(value));
+								this.activeColorPalette.getColorForValue(value));
 					} else {
-						thermalRow.push(this.activeColorPaletteModel.nullColor());
+						thermalRow.push(this.activeColorPalette.nullColor());
 					}
 				}
 				thermalImageArray.push(thermalRow);
@@ -1629,11 +1597,9 @@ class ThermalArrayModel extends EventEmitter{
 				pixelArray:thermalImageArray}];
 		return graphicsInstructions;
 	}
-
 	getThermalPreview() {
 		return this.thermalFileModel.dataUrl;
 	}
-
 	parseFile(irFile) {
 		return new Promise((resolve, reject) => {
 			this.thermalFileModel.loadFile(irFile).then(() => {
@@ -1645,12 +1611,10 @@ class ThermalArrayModel extends EventEmitter{
 			});
 		});
 	}
-
-	setActiveColorPaletteModel(colorPaletteModel) {
-		this.activeColorPaletteModel=colorPaletteModel;
+	activateColorPalette(colorPaletteModel) {
+		this.activeColorPalette=colorPaletteModel;
 		this.emit('draw',{});
 	}
-
 	createThermalArray() {
 		const rawData=this.thermalFileModel.dataFLIR.rawData;
 		const cameraData=this.thermalFileModel.dataFLIR.cameraData;
@@ -1700,7 +1664,6 @@ class ThermalFileModel extends EventEmitter{
 		this.recordsFLIR={};
 		this.dataFLIR={};
 	}
-
 	loadFile(irFile) {
 		return new Promise((resolve, reject) => {
 			let byteArrayReader = new FileReader();
@@ -1729,7 +1692,6 @@ class ThermalFileModel extends EventEmitter{
 			byteArrayReader.readAsArrayBuffer(irFile);
 		});
 	}
-
 	parseFile() {
 		console.log("ThermalFileModel: find segments");
 		this.findSegments();
@@ -1744,7 +1706,6 @@ class ThermalFileModel extends EventEmitter{
 		console.log("ThermalFileModel: process Camera Data");
 		this.processCameraData();
 	}
-
 	findSegments() {
 		let i = 0;
 		let found_exif = false;
@@ -1786,7 +1747,6 @@ class ThermalFileModel extends EventEmitter{
 		if(!this.segmentList) {throw "Found no segments"}
 		if(!found_exif) {throw "Found no EXIF segments"}
 	}
-
 	extractFLIRSegments() {
 		//compile segments into flir data
 		this.bytesFLIR = new Uint8Array([]);
@@ -1817,7 +1777,6 @@ class ThermalFileModel extends EventEmitter{
 			throw "Found no FLIR segments"
 		}
 	}
-
 	processFLIRHeader() 
 	{
 		if(this.bytesFLIR.length<0x40) {
@@ -1846,7 +1805,6 @@ class ThermalFileModel extends EventEmitter{
 		}
 		throw "FLIR header has invalid start code"
 	}
-
 	processFLIRRecords()
 	{
 		if(this.headerFLIR['NumRecords']>255) {
@@ -1883,7 +1841,6 @@ class ThermalFileModel extends EventEmitter{
 			}
 		}
 	}
-
 	processRawData()
 	{
 		if(!this.recordsFLIR.hasOwnProperty(0x01)) {
@@ -1909,7 +1866,6 @@ class ThermalFileModel extends EventEmitter{
 				raw_data['ImageWidth']*raw_data['ImageHeight'], reverse)
 		this.dataFLIR["rawData"] = raw_data;
 	}
-
 	processCameraData()
 	{
 		if(!this.recordsFLIR.hasOwnProperty(0x20)) {
@@ -2148,7 +2104,6 @@ class ColorPaletteModel extends EventEmitter{
 		this.maxValue = 100;
 		this.palette = [[0,0,0],[255,255,255]];
 	}
-
 	initializePalette(valueArray) {
 		let minValue = Infinity;
 		let maxValue = -Infinity;
@@ -2170,11 +2125,9 @@ class ColorPaletteModel extends EventEmitter{
 		this.minValue = minValue;
 		this.maxValue = maxValue;
 	}
-
 	changePaletteValue() {
 		this.emit("palettechange",{});
 	}
-
 	nullColor() {
 		return `rgb(0,0,0)`;
 	}
@@ -2193,7 +2146,6 @@ class ColorPaletteModel extends EventEmitter{
 		const b = Math.round(color1[2] + (t * (color2[2]-color1[2])));
 		return `rgb(${r}, ${g}, ${b})`;
 	}
-
 	getColorForValue(value) {
 		let valueIndex = 0;
 		if (value>this.maxValue) {
@@ -2341,10 +2293,10 @@ class ViridisPalette2 extends ColorPaletteModel{
 		irAnalysisController = new IrAnalysisController(
 				"id_thermalCanvasContainer",
 				"id_thermalCanvasSizeContainer");
-		irAnalysisController.setActiveColorPaletteModel(colorPaletteModel);
-		irAnalysisController.setActiveThermalImageView(thermalImageView);
-		irAnalysisController.setActiveToolView(toolView);
-		irAnalysisController.setActiveAnalysisView(analysisView);
+		irAnalysisController.activateColorPalette(colorPaletteModel);
+		irAnalysisController.setThermalImageView(thermalImageView);
+		irAnalysisController.setToolView(toolView);
+		irAnalysisController.setAnalysisView(analysisView);
 
 		const loadedFilesContainer = document.getElementById('id_loadedFiles');
 		loadedFilesContainer.ondragover = 
@@ -2436,11 +2388,11 @@ class ViridisPalette2 extends ColorPaletteModel{
 	}
 
 	function activatePointerTool() {
-		irAnalysisController.setActiveToolModel(toolPointer);
+		irAnalysisController.activateToolModel(toolPointer);
 	}
 
 	function activateProfileTool() {
-		irAnalysisController.setActiveToolModel(toolProfile);
+		irAnalysisController.activateToolModel(toolProfile);
 	}
 
 	function newTemperatureData() {

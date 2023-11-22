@@ -65,9 +65,10 @@
 		width: 100%;
 		height:20%;
 		flex: 0 0 auto;
-		background-color: rgba(255,255,255,0.1);
 		display: flex;
 		flex-direction: row;
+		border: none;
+		background-color: rgba(20,20,20,0.1);
 	}
 	.fileinstance-image {
 		height:100%;
@@ -79,7 +80,7 @@
 		transition: filter 0.1s;
 	}
 	.fileinstance-image:hover {
-		filter: brightness(70%);
+		filter: brightness(120%);
 	}
 	.fileinstance-controls {
 		height:100%;
@@ -93,7 +94,7 @@
 		min-width: 100%;
 		height:auto;
 		padding: 2px;
-		 background-color: rgba(255,255,255,0.1);
+		background-color: rgba(255,255,255,0.1);
 		flex: 1 0 auto;
 	}
 	.fileinstance-button {
@@ -176,6 +177,10 @@
 	.hover-green:hover {
 		background-color: rgba(95,150,35,0.5);
 	}
+	.selected {
+		border: 1px solid white ;
+		background-color: rgba(255,255,255,0.1);
+	}
 	.tools-container {
 		width: 100%;
 		flex: 1 1 auto;
@@ -217,7 +222,6 @@
 </style>
 
 <script>
-
 class EventEmitter {
 	constructor() {
 		this.events = {};
@@ -283,6 +287,13 @@ class FileInstanceView extends EventEmitter{
 			this.rendered=false;
 		}
 	}
+	setHighlight(highlight=false) {
+		if(highlight) {
+			this.elementDiv.classList.add('selected');
+		} else {
+			this.elementDiv.classList.remove('selected');
+		}
+	}
 	rename = (event) => {
 		this.thermalArray.name=this.elementName.value;
 	}
@@ -339,6 +350,13 @@ class ToolInstanceView extends EventEmitter{
 		}
 		this.toolList = document.getElementById(toolListId);
 	}
+	setHighlight(highlight=false) {
+		if(highlight) {
+			this.elementDiv.classList.add('selected');
+		} else {
+			this.elementDiv.classList.remove('selected');
+		}
+	}
 	rename = (event) => {
 		this.toolModel.name=this.elementName.value;
 	}
@@ -360,10 +378,10 @@ class IrAnalysisController extends EventEmitter{
 		this.canvasDiv = document.getElementById(canvasDivId);
 
 		this.fileInstances={};
-		this.toolInstances={};
-
 		this.activeFileKey=null;
+		this.toolInstances={};
 		this.activeToolKey=null;
+
 		this.activeTool = null;
 		this.activeThermalArray = null;
 		this.activeColorPalette = null;
@@ -371,6 +389,7 @@ class IrAnalysisController extends EventEmitter{
 		this.thermalImageView = null;
 		this.toolView = null;
 		this.analysisView = null;
+		this.viewsLoaded = false;
 
 		window.addEventListener('resize',this.resizeWindow);
 		this.canvasDiv.addEventListener('wheel',this.mouseWheel);
@@ -383,37 +402,43 @@ class IrAnalysisController extends EventEmitter{
 	}
 
 	synchronizeEverything() {
-		console.log("synch");
+		//Check that views are loaded
+		if(this.thermalImageView && this.toolView && this.analysisView) {
+			this.viewsLoaded = true;
+		} else {
+			this.viewsLoaded = false;
+		}
+		//Set the correct tool model
+		if(this.activeFileKey && this.activeToolKey) {
+			const toolModel = this.toolInstances[this.activeToolKey].toolModel;
+			this.activateToolModel(toolModel);
+		} else {
+			this.activateToolModel(null);
+		}
+		//Set the active thermal array
 		if(this.activeFileKey) {
-			//Configure the active tool if one is selected
-			const activeToolKey=this.fileInstances[this.activeFileKey].activeToolKey;
-			if(activeToolKey) {
-				this.activateToolModel(this.toolInstances[activeToolKey].toolModel);
-			} else {
-				this.activateToolModel(null);
-			}
-			//Set the correct thermal array model
-			let thermalArray=
-					this.fileInstances[this.activeFileKey].thermalArray;
-			if(thermalArray) {
-				this.activateThermalArray(thermalArray);
-			} else {
-				this.activeThermalArray(null);
-			}
-			//Set the correct color palettes
-			if(this.activeThermalArray) {
-				this.activeThermalArray.activateColorPalette(this.activeColorPalette);
-			}
-			if(this.activeTool) {
+			const thermalArray = this.fileInstances[this.activeFileKey].thermalArray;
+			this.activateThermalArray(thermalArray);
+		} else {
+			this.activateThermalArray(null);
+		}
+		//Sync the tool and thermal array
+		if(this.activeTool && this.activeThermalArray) {
+			this.activeTool.setArray(this.activeThermalArray.getThermalArray());
+		}
+		//Sync the correct color palettes
+		if(this.activeColorPalette && this.activeThermalArray) {
+			this.activeThermalArray.activateColorPalette(this.activeColorPalette);
+		}
+		if(this.activeColorPalette && this.activeTool) {
 				this.activeTool.activateColorPalette(this.activeColorPalette);
-			}
-			//Synchronize the tool and thermal array
-			if(this.activeTool && this.activeThermalArray) {
-				this.activeTool.setArray(this.activeThermalArray.getThermalArray());
-			}
 		}
 		//Recalculate canvas sizes
 		this.resizeWindow({});
+		//Update each view as required
+		this.drawThermalImage({});
+		this.drawToolCursor({});
+		this.drawToolAnalysis({});
 	}
 	setThermalImageView(thermalImageView) {
 		if(this.thermalImageView) {
@@ -439,14 +464,15 @@ class IrAnalysisController extends EventEmitter{
 		if(this.analysisView) {
 			this.analysisView.hide();
 			this.toolView.removeEventListener('draw',
-					this.drawAnalysis);
+					this.drawToolAnalysis);
 		}
 		this.analysisView=analysisView;
 		this.analysisView.display();
 		this.analysisView.addEventListener('draw',
-				this.drawAnalysis);
+				this.drawToolAnalysis);
 		this.synchronizeEverything();
 	}
+
 	activateColorPalette(colorPaletteModel) {
 		if(this.activeColorPalette) {
 			this.activeColorPalette.removeEventListener('palettechange',
@@ -458,27 +484,66 @@ class IrAnalysisController extends EventEmitter{
 	}
 	activateToolModel(toolModel) {
 		if(this.activeTool) {
-			console.log("Remove tool");
 			this.activeTool.removeEventListener('draw',
 					this.drawTool);
 		}
 		this.activeTool=toolModel;
 		if(this.activeTool) {
-			console.log("add tool");
 			this.activeTool.addEventListener('draw',
 					this.drawTool);
 		}
 	}
 	activateThermalArray(thermalArrayModel) {
 		if(this.activeThermalArray) {
-			console.log("remove thermal array");
-			this.activeThermalArray.removeEventListener('arraychange',
-					this.arrayChange);
+			this.activeThermalArray.removeEventListener('draw',
+					this.drawThermalImage);
 		}
-		console.log("add thermal array");
 		this.activeThermalArray = thermalArrayModel;
-		this.activeThermalArray.addEventListener('arraychange',
-				this.arrayChange);
+		if(this.activeThermalArray) {
+			this.activeThermalArray.addEventListener('draw',
+					this.drawThermalImage);
+		}
+	}
+	activateFileInstance(fileKey) {
+		//Deactive currently selected file instance if there is one
+		if(this.activeFileKey) {
+			//unlisten and hide all local tools
+			const prevToolKeys = this.fileInstances[this.activeFileKey].localToolKeys;
+			prevToolKeys.forEach((toolKey) => {
+				this.unlistenToolInstanceView(this.toolInstances[toolKey]);
+				this.toolInstances[toolKey].removeElements();
+			});
+			//Remove highlight from file instance
+			this.fileInstances[this.activeFileKey].setHighlight(false);
+		}
+		//Activate the new file instance
+		this.activeFileKey = fileKey;
+		if(this.activeFileKey) {
+			//Listen and render all local tools
+			const currentLocalToolKeys = 
+					this.fileInstances[this.activeFileKey].localToolKeys;
+			currentLocalToolKeys.forEach((toolKey) => {
+				this.listenToolInstanceView(this.toolInstances[toolKey]);
+				this.toolInstances[toolKey].renderElements();
+			});
+			//add highlight
+			this.fileInstances[this.activeFileKey].setHighlight(true);
+			//Change active tool
+			this.activateToolInstance(
+					this.fileInstances[this.activeFileKey].activeToolKey);
+		}
+	}
+	activateToolInstance(toolKey) {
+		if(this.activeFileKey) {
+			if(this.activeToolKey) {
+				this.toolInstances[this.activeToolKey].setHighlight(false);
+			}
+			this.activeToolKey=toolKey;
+			this.fileInstances[this.activeFileKey].activeToolKey=this.activeToolKey;
+			if(this.activeToolKey) {
+					this.toolInstances[this.activeToolKey].setHighlight(true);
+			}
+		}
 	}
 
 	addFileInstanceView(fileInstanceView) {
@@ -518,36 +583,16 @@ class IrAnalysisController extends EventEmitter{
 		//Incase this was our active file
 		if(this.activeFileKey == event.instance.fileKey) {
 			this.activeFileKey = null;
+			this.activeToolKey = null;
 		}
-		console.log(event.instance.fileKey);
 		delete this.fileInstances[event.instance.fileKey];
-		console.log(this.fileInstances);
 		this.synchronizeEverything();
 	}
 	selectFileInstanceView = (event) =>  {
 		//Skip if this is already active instance
-		if(this.activeFileKey == event.instance.fileKey) {
-			return;
+		if(this.activeFileKey != event.instance.fileKey) {
+			this.activateFileInstance(event.instance.fileKey);
 		}
-		//Deactive currently selected file instance if there is one
-		if(this.activeFileKey) {
-			//unlisten and hide all local tools
-			const previousLocalToolKeys = 
-					this.fileInstances[this.activeFileKey].localToolKeys;
-			previousLocalToolKeys.forEach((toolKey) => {
-				this.unlistenToolInstanceView(this.toolInstances[toolKey]);
-				this.toolInstances[toolKey].removeElements();
-			});
-		}
-		//Activate the new file instance
-		this.activeFileKey = event.instance.fileKey;
-		//Listen and render all local tools
-		const currentLocalToolKeys = 
-				this.fileInstances[this.activeFileKey].localToolKeys;
-		currentLocalToolKeys.forEach((toolKey) => {
-			this.listenToolInstanceView(this.toolInstances[toolKey]);
-			this.toolInstances[toolKey].renderElements();
-		});
 		this.synchronizeEverything();
 	}
 
@@ -559,6 +604,7 @@ class IrAnalysisController extends EventEmitter{
 		while(this.toolInstances[toolKey] !== undefined) {
 			toolKey++;
 		}
+		toolInstanceView.toolModel.name += `_${toolKey}`
 		toolInstanceView.toolKey=toolKey;
 		toolInstanceView.globalTool=globalTool;
 		this.toolInstances[toolKey]=toolInstanceView;
@@ -588,22 +634,18 @@ class IrAnalysisController extends EventEmitter{
 				this.scopeToolInstanceView);
 	}
 	selectToolInstanceView = (event) =>  {
-		if(this.activeFileKey) {
-			//Don't synchronize unless this is a change in tool
-			if(this.fileInstances[this.activeFileKey].activeToolKey != 
-					event.instance.toolKey) {
-				this.fileInstances[this.activeFileKey].activeToolKey=
-						event.instance.toolKey;
-				this.synchronizeEverything();
-			}
+		if(this.activeToolKey != event.instance.toolKey) {
+			this.activateToolInstance(event.instance.toolKey);
 		}
+		this.synchronizeEverything();
 	}
 	deleteToolInstanceView = (event) =>  {
-		//Remove the tool instance view
-		this.unlistenToolInstanceView(event.instance);
-		event.instance.removeElements();
-		//Remove all references to this tool from file instances
 		let toolKey = event.instance.toolKey;
+		//If deleting the current active tool
+		if(this.activeToolKey == toolKey) {
+			this.activateToolInstance(null);
+		}
+		//Remove all references to this tool from file instances
 		for(let fileKey in this.fileInstances) {
 			//Remove this tool from local tool key list(s)
 			this.fileInstances[fileKey].localToolKeys = 
@@ -614,6 +656,9 @@ class IrAnalysisController extends EventEmitter{
 				this.fileInstances[fileKey].activeToolKey = null;
 			}
 		}
+		//Finish removing the instance
+		this.unlistenToolInstanceView(event.instance);
+		event.instance.removeElements();
 		delete this.toolInstances[toolKey];
 		this.synchronizeEverything();
 	}
@@ -648,50 +693,62 @@ class IrAnalysisController extends EventEmitter{
 					this.fileInstances[this.activeFileKey].localToolKeys.filter(
 							localToolKey => localToolKey !== toolKey);
 		}
+		//Retain selection of this tool
+		if (this.activeToolKey == event.instance.toolKey) {
+			this.activateToolInstance(event.instance.toolKey);
+		}
 	}
 
 	drawThermalImage = (event) =>  {
-		if(this.activeThermalArray) {
-			let thermalImageGraphics = this.activeThermalArray.getThermalImage();
-			thermalImageGraphics = calcGraphicPixelScale(thermalImageGraphics, 
-					this.activeThermalArray.arrayWidth(),
-					this.activeThermalArray.arrayHeight(),
-					this.thermalImageView.canvasWidth(),
-					this.thermalImageView.canvasHeight());
-			this.thermalImageView.draw(thermalImageGraphics);
+		if(this.viewsLoaded) {
+			if(this.activeThermalArray) {
+				let thermalImageGraphics = this.activeThermalArray.getThermalImage();
+				thermalImageGraphics = calcGraphicPixelScale(thermalImageGraphics, 
+						this.activeThermalArray.arrayWidth(),
+						this.activeThermalArray.arrayHeight(),
+						this.thermalImageView.canvasWidth(),
+						this.thermalImageView.canvasHeight());
+				this.thermalImageView.draw(thermalImageGraphics);
+			} else {
+				this.thermalImageView.draw([{type:'blank'}]);
+			}
 		}
 	}
-	drawTool = (event) =>  {
-		if(this.activeTool) {
-			let toolImageGraphics = this.activeTool.getToolGraphics();
-			toolImageGraphics = calcGraphicPixelScale(toolImageGraphics, 
-					this.activeThermalArray.arrayWidth(),
-					this.activeThermalArray.arrayHeight(),
-					this.thermalImageView.canvasWidth(),
-					this.thermalImageView.canvasHeight());
-			this.toolView.draw(toolImageGraphics);
-
-			let analyticsImageGraphics = this.activeTool.getAnalyticsGraphics();
-			this.analysisView.draw(analyticsImageGraphics);
+	drawTool = (event) => {
+		this.drawToolCursor(event);
+		this.drawToolAnalysis(event);
+	}
+	drawToolCursor = (event) => {
+		if(this.viewsLoaded) {
+			if(this.activeTool && this.activeThermalArray) {
+				let toolImageGraphics = this.activeTool.getToolGraphics();
+				toolImageGraphics = calcGraphicPixelScale(toolImageGraphics, 
+						this.activeThermalArray.arrayWidth(),
+						this.activeThermalArray.arrayHeight(),
+						this.thermalImageView.canvasWidth(),
+						this.thermalImageView.canvasHeight());
+				this.toolView.draw(toolImageGraphics);
+			} else {
+				this.toolView.draw([{type:'blank'}]);
+			}
 		}
 	}
-	drawAnalysis = (event) =>  {
-		if(this.activeTool) {
-			let analyticsImageGraphics = this.activeTool.getAnalyticsGraphics();
-			this.analysisView.draw(analyticsImageGraphics);
+	drawToolAnalysis = (event) => {
+		if(this.viewsLoaded) {
+			if(this.activeTool) {
+				let analyticsImageGraphics = this.activeTool.getAnalyticsGraphics();
+				this.analysisView.draw(analyticsImageGraphics);
+			} else {
+				this.analysisView.draw([{type: 'blank'}]);
+			}
 		}
 	}
-	arrayChange = (event) => {
-		if(this.activeTool) {
-			this.activeTool.thermalArrayChange();
-		}
-	}
-	paletteChange = (event) =>  {
+	paletteChange = (event) => {
 		if(this.activeThermalArray) {
 			this.activeThermalArray.paletteChange();
 		}
 	}
-	resizeWindow = (event) =>  {
+	resizeWindow = (event) => {
 		let arrayHeight = 50;
 		let arrayWidth = 50;
 		if(this.activeThermalArray) {
@@ -764,6 +821,10 @@ class IrAnalysisController extends EventEmitter{
 
 class AnalysisTool extends EventEmitter{
 	static name() {return "Analysis Tool";}
+	constructor() {
+		super();
+		this.name="AnalysisTool";
+	}
 	mouseWheel(deltaX, deltaY) {;}
 	mouseUp(mouseX, mouseY) {;}
 	mouseDown(mouseX, mouseY) {;}
@@ -783,10 +844,11 @@ class AnalysisTool extends EventEmitter{
 		}
 	}
 }
-class PointerTool extends AnalysisTool {
+class WindowTool extends AnalysisTool {
 	static name() {return "Pointer Tool";}
 	constructor() {
 		super();
+		this.name="WindowTool";
 		this.activeColorPalette=null;
 		this.boxWidth=3;
 		this.boxHeight=3;
@@ -968,7 +1030,7 @@ class ProfileTool extends AnalysisTool {
 	static name() {return "Profile Tool";}
 	constructor() {
 		super();
-		console.log("ProfileTool: construct");
+		this.name="ProfileTool";
 		this.width=1;
 		this.mouseX = 0;
 		this.mouseY = 0;
@@ -1141,10 +1203,6 @@ class CanvasGraphicsView extends EventEmitter{
 			this.emit('draw',{});
 		}
 	}
-	clearCanvas() {
-		const canvasCtx = this.canvas.getContext('2d');
-		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
-	}
 	drawBox(instruction) {
 		const boxX = instruction.x;
 		const boxY = instruction.y;
@@ -1210,7 +1268,7 @@ class CanvasGraphicsView extends EventEmitter{
 		}
 	}
 	draw(drawInstructions) {
-		this.clearCanvas();
+		this.clear();
 		for (let instruction of drawInstructions) {
 			switch(instruction.type) {
 				case 'pixelarray':
@@ -1219,8 +1277,15 @@ class CanvasGraphicsView extends EventEmitter{
 				case 'box':
 					this.drawBox(instruction);
 					break;
+				case 'blank':
+					this.clear();
+					break;
 			}
 		}
+	}
+	clear() {
+		const canvasCtx = this.canvas.getContext('2d');
+		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
 	}
 }
 class ThermalImageView extends CanvasGraphicsView {
@@ -1552,8 +1617,24 @@ class AnalysisView extends EventEmitter{
 				case 'analysisInfo':
 					this.drawAnalysisInfo(instruction);
 					break;
+				case 'blank':
+					this.clear();
+					break;
 			}
 		}
+	}
+	clear() {
+		const canvasHeight = this.canvas.height;
+		const canvasWidth = this.canvas.width;
+		const canvasCtx = this.canvas.getContext('2d');
+		const drawCtx = this.drawCanvas.getContext('2d');
+		const colorCtx = this.colorCanvas.getContext('2d');
+		canvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+		colorCtx.clearRect(0,0,canvasWidth,canvasHeight);
+		drawCtx.clearRect(0,0,canvasWidth,canvasHeight);
+		this.minSpan.innerHTML = "";
+		this.maxSpan.innerHTML = "";
+		this.avgSpan.innerHTML = "";
 	}
 }
 
@@ -2387,28 +2468,26 @@ class ViridisPalette2 extends ColorPaletteModel{
 		handleFileUpload(fileInput.files)
 	}
 
-	function activatePointerTool() {
-		irAnalysisController.activateToolModel(toolPointer);
-	}
+	function addTool(selectId, globalTool=false) {
+		const selectElement = document.getElementById(selectId);
+		let toolModel=null;
+		switch ( selectElement.value) {
+			case "windowTool":
+				toolModel = new WindowTool();
+				break;
+			case "profileTool":
+				toolModel = new ProfileTool();
+				break;
+		}
 
-	function activateProfileTool() {
-		irAnalysisController.activateToolModel(toolProfile);
-	}
-
-	function newTemperatureData() {
-
-	}
-
-	function addLocal() {
-		let tool = new PointerTool();
-		let toolView = new ToolInstanceView(tool, "id_availGlobalTools");
-		irAnalysisController.addToolInstanceView(toolView, false);
-	}
-
-	function addGlobal() {
-		let tool = new PointerTool();
-		let toolView = new ToolInstanceView(tool, "id_availGlobalTools");
-		irAnalysisController.addToolInstanceView(toolView, true);
+		let toolListId = "";
+		if(globalTool) {
+			toolListId = "id_availGlobalTools";
+		} else {
+			toolListId = "id_availLocalTools";
+		}
+		let toolView = new ToolInstanceView(toolModel, toolListId);
+		irAnalysisController.addToolInstanceView(toolView, globalTool);
 	}
 </script>
 </head>
@@ -2445,23 +2524,22 @@ class ViridisPalette2 extends ColorPaletteModel{
 				<h2>Tools</h2>
 				<div class="tools-container">
 					<select id="id_selectGlobalTools" name="global_tools" class="tools-select">
-						<option value="window" class="tools-option">Window</option>
-						<option value="profile" class="tools-option">Profile</option>
+						<option value="windowTool" class="tools-option">Window</option>
+						<option value="profileTool" class="tools-option">Profile</option>
 					</select>
-					<button class="tools-add" onclick="addGlobal()">Add</button>
+					<button class="tools-add" onclick="addTool('id_selectGlobalTools',true)">Add</button>
 					<div id="id_availGlobalTools" class="availtools-container">
 					</div>
-					<select id="id_selectInstanceTools" name="instance_tools" class="tools-select">
-						<option value="window" class="tools-option">Window</option>
-						<option value="profile" class="tools-option">Profile</option>
+					<select id="id_selectLocalTools" name="instance_tools" class="tools-select">
+						<option value="windowTool" class="tools-option">Window</option>
+						<option value="profileTool" class="tools-option">Profile</option>
 					</select>
-					<button class="tools-add" onclick="addLocal()">Add</button>
+					<button class="tools-add" onclick="addTool('id_selectLocalTools',false)">Add</button>
 					<div id="id_availLocalTools" class="availtools-container">
 					</div>
 				</div>
 			</div>
 		</div>
-
 	</div>
 
 	<template id="id_genericAnalysisTemplate">
@@ -2475,12 +2553,12 @@ class ViridisPalette2 extends ColorPaletteModel{
 		</div>
 	</template>
 	<template id="id_fileInstanceTemplate">
-		<div id="id_fileInstance" class="fileinstance-container">
+		<div id="id_fileInstance" class="fileinstance-container unselected">
 			<img id="id_instanceImage" class="fileinstance-image"></img>
 			<div class="fileinstance-controls">
 				<input type='text' id="id_instanceName" class="fileinstance-name">
 				<div id="id_instanceRename" class="fileinstance-button hover-green">
-					📝
+					💾
 				</div>
 				<div id="id_instanceDelete" class="fileinstance-button hover-red">
 					🗑️
@@ -2490,7 +2568,7 @@ class ViridisPalette2 extends ColorPaletteModel{
 		</div>
 	</template>
 	<template id="id_toolInstanceTemplate">
-		<div id="id_fileInstance" class="fileinstance-container">
+		<div id="id_fileInstance" class="fileinstance-container unselected">
 			<img id="id_instanceImage" class="fileinstance-image"></img>
 			<div class="fileinstance-controls">
 				<input type='text' id="id_instanceName" class="fileinstance-name">

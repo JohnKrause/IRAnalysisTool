@@ -15,145 +15,144 @@
 	body, html {
 		font-family: Arial, sans-serif;
 		font-size: 16px;
-		color: rgba(192,190,190);
+		color: rgba(200,200,200);
 		background-color: #555;
 		height: 100%;
 	}
-	.page-container {
+	.page_container {
 		width: 100%;
 		height: 100%;
+		display: grid;
+		grid-template-columns: 80% 20%;
+		grid-template-rows: 40px calc(100vh - 40px);
+	}
+	.apptitle {
+		grid-column: 1;
+		grid-row: 1;
+	}
+	.rightbar {
+		grid-column: 2;
+		grid-row: 1 / 3;
+
+	}
+	.appgraphics {
+		grid-column: 1;
+		grid-row: 2;
+	}
+	.bgblur {
+		backdrop-filter: blur(10px);
+	}
+	.bgdark {
+		background-color: rgba(0,0,0,0.2);
+	}
+	.bglight {
+		background-color: rgba(255,255,255,0.1);
+	}
+	.bgactive {
+		background-color: rgba(255,255,255,0.1);
+	}
+	.bgpassive {
+		background-color: rgba(255,255,255,0.1);
+	}
+	.flexcol_container {
 		display: flex;
 		flex-direction: column;
 		flex-wrap: nowrap;
+		border-radius: 10px;
+		gap:10px;
 	}
-	.app-container {
-		width: 100%;
-		max-height: 100%;
-		flex: 1 1 auto;
+	.flexrow_container {
 		display: flex;
 		flex-direction: row;
+		flex-wrap: nowrap;
+		border-radius: 10px;
+		gap:10px;
 	}
-	.title-container {
-		width: auto;
-		height: 40px;
-		flex: 0 0 auto;
-		background-color: rgba(0,0,0,0);
-	}
-	.title-container h1 {
-		margin: 5px;
-		text-align: left;
-	}
-	.rightbar-container {
-		width: 20%;
-		height: 100%;
-		flex: 0 0 auto;
-		display: flex;
-		flex-direction: column;
-		background-color: rgba(255,255,255,0.1);
-		backdrop-filter: blur(4px);
-	}
-	.loadedfiles-container {
-		width: 100%;
-		height:50%;
-		flex: 0 0 auto;
+	.flexlist_container {
 		display: flex;
 		flex-direction: column;
 		flex-wrap: nowrap;
+		border-radius: 0px;
 		overflow-y: scroll;
+		gap: 4px;
 	}
-	.fileinstance-container {
-		width: 100%;
-		height:20%;
+	.flexele_fixed {
 		flex: 0 0 auto;
-		display: flex;
-		flex-direction: row;
-		border: none;
-		background-color: rgba(20,20,20,0.1);
 	}
-	.fileinstance-image {
-		height:100%;
-		flex: 0 0 auto;
-		object-fit: contain;
-		object-position: center;
-		padding: 2px;
-		background-color: rgba(255,255,255,0.1);
-		transition: filter 0.1s;
+	.flexele_shrink {
+		flex: 0 1 auto;
 	}
-	.fileinstance-image:hover {
-		filter: brightness(120%);
-	}
-	.fileinstance-controls {
-		height:100%;
-		flex: 1 1 auto;
-		display: flex;
-		flex-direction: row;
-		flex-wrap: wrap;
-	}
-	.fileinstance-name {
-		width: 100%;
-		min-width: 100%;
-		height:auto;
-		padding: 2px;
-		background-color: rgba(255,255,255,0.1);
+	.flexele_grow {
 		flex: 1 0 auto;
 	}
-	.fileinstance-button {
-		width: 10%;
-		height:auto;
-		flex: auto;
-		padding: 2px;
-		background-color: rgba(255,255,255,0.1);
-	}
-	.appgraphics-container{
-		width: 80%;
+	.flexele_both {
 		flex: 1 1 auto;
-		display: flex;
-		flex-direction: column;
 	}
-	.thermalcanvas-container{
+	.flexlist_item {
+		border-radius: 0px;
 		width: 100%;
-		flex: 1 1 auto;
-		display: flex;
-		justify-content: center;
-		align-items: center;
+		padding: 4px;
+		border: 1px solid rgba(0,0,0,0);
 	}
-	.thermalcanvas-size-container{
+	.flexlist_selected {
+		background-color: rgba(49,104,142,1);
+	}
+	.thermgraphics_size{
 		box-sizing: content-box;
 		width: auto;
 		height: auto;
 		position: relative;
-		background-color: rgba(255,255,255,0.1);
-		backdrop-filter: blur(4px);
-		border-radius: 10px;
-		border: 1px solid white ;
 	}
-	.thermalcanvas-element {
+	.thermcanvas_element {
 		position: absolute;
-		border: 1px solid black ;
 		top:15px;
 		left:15px;
+		border: 1px solid black;
 	}
-	.thermalcanvas-element:hover {
+	.thermcanvas_element:hover {
 		cursor: crosshair;
 	}
-	.toolCanvas {
-		z-index:2;
+
+	.appbtn {
+		width:min-content;
+		height: min-content;
+		padding: 3px;
+		color: rgba(200,200,200);
+		border: 1px solid white;
+		font-size: 16px;
 	}
-	.thermalCanvas {
-		z-index:1;
+	.appbtn_circle {
+		width:min-content;
+		height: min-content;
+		padding: 8px;
+		color: rgba(200,200,200);
+		border-radius: 50%;
+		font-size: 24px;
 	}
-	.analysis-container {
-		height: 20%;
-		width: auto;
-		margin: 20px;
-		flex: 0 0 auto;
-		display: flex;
-		flex-direction: row;
-		background-color: rgba(255,255,255,0.1);
-		backdrop-filter: blur(4px);
-		border-radius: 10px;
-		border: 1px solid white ;
+	.appbtn:hover {
+		background-color: rgba(255,255,255,0.5);
 	}
+	.appbtn_circle:hover {
+		background-color: rgba(255,255,255,0.5);
+	}
+	.appselect {
+		width:min-content;
+		height: min-content;
+		padding: 3px;
+		color:rgba(192,190,190);
+		border: 1px solid white;
+		font-size: 16px;
+	}
+	.appinput {
+		height:min-content;
+		width:min-content;
+		padding: 8px;
+		color:rgba(192,190,190);
+		border: none;
+		border-radius: 8px;
+		font-size: 16px;
+	}
+
 	.analysisinfo-container {
 		padding: 10px;
 		width: 25%;
@@ -169,7 +168,6 @@
 		left:0;
 		width: 100%;
 		height: 100%;
-		border: none;
 	}
 	.hover-red:hover {
 		background-color: rgba(95,25,35,0.5);
@@ -177,48 +175,65 @@
 	.hover-green:hover {
 		background-color: rgba(95,150,35,0.5);
 	}
-	.selected {
-		border: 1px solid white ;
+	.hover-light:hover {
 		background-color: rgba(255,255,255,0.1);
 	}
-	.tools-container {
+
+	.availtools-container {
 		width: 100%;
+		height:30%;
 		flex: 1 1 auto;
 		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		flex-wrap: nowrap;
+		overflow-y: scroll;
+		background-color: rgba(0,0,0,0.3);
+	}
+	.toolinstance-container {
+		width: 100%;
+		height: min-content;
+		flex: 0 0 auto;
+		display: flex;
 		flex-direction: row;
-		flex-wrap: wrap;
+		flex-wrap: nowrap;
+		border: none;
 	}
-	.tools-select {
-		width: 80%;
-		height: min-content;
-		padding: 3px;
-		margin:0px;
-		flex: 1 0 auto;
-		border: 1px solid white;
-		background-color: rgba(0,0,0,0.1);
-		backdrop-filter: blur(4px);
-		color:rgba(192,190,190);
-		font-size: 16px;
+	.toolinstance-name {
+		width: auto;
+		height: 100%;
+		flex: 1 1 auto;
 	}
+	.toolinstance-button {
+		width: min-content;
+		height: 100%;
+		padding: 4px;
+		flex: 0 0 auto;
+	}
+	.selectadd-container {
+		width:100%;
+		height: auto;
+		flex: 0 1 auto;
+		flex-direction: row;
+		flex-wrap: nowrap;
+	}
+
 	.tools-add {
-		width:20%;
+		width:15%;
 		height: min-content;
 		padding: 3px;
-		flex: 1 0 auto;
+		flex: 0 0 auto;
 		border: 1px solid white;
 		background-color: rgba(0,0,0,0.1);
 		backdrop-filter: blur(4px);
 		color:rgba(192,190,190);
 		font-size: 16px;
 	}
+
 	.tools-add:hover {
 		background-color: rgba(255,255,255,0.1);
 	}
-	.availtools-container {
-		width:100%;
-		height:40%;
-		flex: 1 1 auto;
-	}
+
 </style>
 
 <script>
@@ -289,9 +304,9 @@ class FileInstanceView extends EventEmitter{
 	}
 	setHighlight(highlight=false) {
 		if(highlight) {
-			this.elementDiv.classList.add('selected');
+			this.elementDiv.classList.add('flexlist_selected');
 		} else {
-			this.elementDiv.classList.remove('selected');
+			this.elementDiv.classList.remove('flexlist_selected');
 		}
 	}
 	rename = (event) => {
@@ -329,7 +344,7 @@ class ToolInstanceView extends EventEmitter{
 			this.btnDelete.addEventListener('click', this.delete);
 			this.btnScope = toolInstanceElement.querySelector("#id_instanceScope");
 			this.btnScope.addEventListener('click', this.scope);
-			this.btnSelect = toolInstanceElement.querySelector("#id_instanceSelect");
+			this.btnSelect = toolInstanceElement.querySelector("#id_instanceSave");
 			this.btnSelect.addEventListener('click', this.select);
 			this.rendered = true;
 		}
@@ -352,9 +367,9 @@ class ToolInstanceView extends EventEmitter{
 	}
 	setHighlight(highlight=false) {
 		if(highlight) {
-			this.elementDiv.classList.add('selected');
+			this.elementDiv.classList.add('flexlist_selected');
 		} else {
-			this.elementDiv.classList.remove('selected');
+			this.elementDiv.classList.remove('flexlist_selected');
 		}
 	}
 	rename = (event) => {
@@ -1286,6 +1301,8 @@ class CanvasGraphicsView extends EventEmitter{
 	clear() {
 		const canvasCtx = this.canvas.getContext('2d');
 		canvasCtx.clearRect(0,0,this.canvas.width, this.canvas.height);
+		//canvasCtx.fillStyle = 'rgba(0,0,0,0.2)';
+		//canvasCtx.fillRect(0,0,this.canvas.width, this.canvas.height);
 	}
 }
 class ThermalImageView extends CanvasGraphicsView {
@@ -1458,9 +1475,7 @@ class AnalysisView extends EventEmitter{
 		const drawCtx = this.drawCanvas.getContext('2d');
 		const colorCtx = this.colorCanvas.getContext('2d');
 		// Clear canvas
-		canvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-		colorCtx.clearRect(0,0,canvasWidth,canvasHeight);
-		drawCtx.clearRect(0,0,canvasWidth,canvasHeight);
+		this.clear();
 		//Sort the hist bins from low to high bin limit
 		const histBins = instruction.histBins.sort((a,b)=>{return a.t0-b.t0;});
 		//Find min/max bin temperatures and heights
@@ -1530,9 +1545,7 @@ class AnalysisView extends EventEmitter{
 		const drawCtx = this.drawCanvas.getContext('2d');
 		const colorCtx = this.colorCanvas.getContext('2d');
 		// Clear canvas
-		canvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
-		colorCtx.clearRect(0,0,canvasWidth,canvasHeight);
-		drawCtx.clearRect(0,0,canvasWidth,canvasHeight);
+		this.clear();
 		//Get relevant values from instruction
 		const profileArray = instruction.profileArray;
 		//Determine the min and max temperatures
@@ -1632,6 +1645,8 @@ class AnalysisView extends EventEmitter{
 		canvasCtx.clearRect(0, 0, canvasWidth, canvasHeight);
 		colorCtx.clearRect(0,0,canvasWidth,canvasHeight);
 		drawCtx.clearRect(0,0,canvasWidth,canvasHeight);
+		//canvasCtx.fillStyle = 'rgba(0,0,0,0.2)';
+		//canvasCtx.fillRect(0,0,this.canvas.width, this.canvas.height);
 		this.minSpan.innerHTML = "";
 		this.maxSpan.innerHTML = "";
 		this.avgSpan.innerHTML = "";
@@ -2398,9 +2413,9 @@ class ViridisPalette2 extends ColorPaletteModel{
 			// Function to generate a random color
 			function randomColor(a=0.3,bright=10) {
 				let offset=Math.floor(Math.random()*bright);
-				let r=35+offset;
-				let g=35+offset;
-				let b=38+offset;
+				let r=33+offset;
+				let g=33+offset;
+				let b=34+offset;
 
 				r += 1-Math.floor(Math.random() * 2);
 				g += 1-Math.floor(Math.random() * 2);
@@ -2427,7 +2442,7 @@ class ViridisPalette2 extends ColorPaletteModel{
 						}
 					}
 			}
-			ctx.fillStyle = 'rgba(28,25,27,1)';
+			ctx.fillStyle = 'rgba(24,21,22,1)';
 			ctx.fillRect(0,0,canvas.width,canvas.height);
 			drawPixels(5,0.3,0.6,30);
 			drawPixels(25,0.4,0.7,5);
@@ -2493,92 +2508,153 @@ class ViridisPalette2 extends ColorPaletteModel{
 </head>
 
 <body onload="startup()">
-	<div class="page-container">
-		<div class="app-container" id="id_appContainer">
-			<div class="appgraphics-container">
-				<div class="title-container">
-					<h1>Thermal Image Analysis</h1>
-				</div>
-				<div class="thermalcanvas-container" id="id_thermalCanvasContainer">
-					<div class="thermalcanvas-size-container" 
-							id="id_thermalCanvasSizeContainer">
-						<canvas class="thermalcanvas-element thermalCanvas" 
-								id="id_thermalCanvas"></canvas>
-						<canvas class="thermalcanvas-element toolCanvas" 
-								id="id_toolCanvas"></canvas>
+	<div class="page_container"
+			style="width:100%; height:100%">
+
+			<div class="apptitle"
+					style="padding: 4px;">
+				<h1>Thermal Image Analysis</h1></div>
+
+			<div class="appgraphics flexcol_container"
+					style="padding:10px; padding-right:5px;">
+				<div class="flexcol_container flexele_both"
+						style="height:100%; width:100%;">
+					<div class="flexcol_container flexele_both" 
+							style="width: 100%; height: 50%; justify-content: center;"
+							id="id_thermalCanvasContainer">
+						<div class="flexcol_container thermgraphics_size flexele_fixed bglight bgblur" 
+								style="height: auto; width: auto; margin: 0 auto; border-radius:10px;"
+								id="id_thermalCanvasSizeContainer">
+							<canvas class="thermcanvas_element" 
+									style="z-index: 1;"
+									id="id_thermalCanvas"></canvas>
+							<canvas class="thermcanvas_element" 
+									style="z-index: 2;"
+									id="id_toolCanvas"></canvas>
+						</div>
 					</div>
 				</div>
-				<div class="analysis-container" id="id_analysisContainer">
-				</div>
+					<div class=" flexrow_container flexele_fixed bglight bgblur" 
+							style="height: 20%; width: 100%;"
+							id="id_analysisContainer"></div>
 			</div>
 
-			<div class="rightbar-container">
-				<h2>Files</h2>
-				<input type="button" id="id_loadButton" value="Choose File" 
-						onclick="document.getElementById('id_fileInput').click();"/>
-				<input type="file" style="display:none;" id="id_fileInput" 
-						name="file" multiple="multiple" onchange="chooseFiles()"/>
-				<div id="id_loadedFiles" class="loadedfiles-container">
+			<div class="rightbar flexcol_container"
+					style="padding:10px; padding-left:5px; height:100%;">
+
+				<div class="flexcol_container bglight bgblur flexele_grow"
+						style="padding:10px; width: 100%; height:40%;">
+					<div class="flexrow_container flexele_fixed"
+							style="width:100%; height:min-content; padding:5px;">
+						<h2>Files</h2>
+						<input type="button" id="id_loadButton" 
+							value="Choose File"
+							class="appbtn bgdark" 
+							style="margin-left:auto;"
+							onclick="document.getElementById('id_fileInput').click();"/>
+					</div>
+
+					
+					<input type="file" style="display:none;" id="id_fileInput" 
+							name="file" multiple="multiple" onchange="chooseFiles()"/>
+					<div class="flexlist_container flexele_grow"
+							style="height: 50%; width: 100%;"
+							id="id_loadedFiles"></div></div>
+
+				<div class="flexcol_container bglight bgblur flexele_grow"
+						style="padding:10px; width: 100%; height:40%;">
+					<h2>Tools</h2>
+
+					<div class="flexrow_container flexele_fixed"
+							style="height:min-content; width:100%;">
+						<select id="id_selectGlobalTools" 
+								name="global_tools" 
+								class="appselect bgdark flexele_grow">
+							<option value="windowTool" >Window</option>
+							<option value="profileTool" >Profile</option></select>
+						<button class="appbtn bgdark" 
+								onclick="addTool('id_selectGlobalTools',true)">Add</button></div>
+					<div class="flexlist_container flexele_both bgdark"
+							style="height:30%; width:100%;"
+							id="id_availGlobalTools"></div>
+
+					<div class="flexrow_container flexele_fixed"
+							style="height:min-content; width:100%">
+						<select id="id_selectLocalTools" 
+								name="instance_tools" 
+								class="appselect bgdark flexele_grow">
+							<option value="windowTool" >Window</option>
+							<option value="profileTool" >Profile</option></select>
+						<button class="appbtn bgdark" 
+								onclick="addTool('id_selectLocalTools',false)">Add</button></div>
+					<div class="flexlist_container flexele_both bgdark"
+							style="height:30%; width:100%;"
+							id="id_availLocalTools"></div>
 				</div>
 
-				<h2>Tools</h2>
-				<div class="tools-container">
-					<select id="id_selectGlobalTools" name="global_tools" class="tools-select">
-						<option value="windowTool" class="tools-option">Window</option>
-						<option value="profileTool" class="tools-option">Profile</option>
-					</select>
-					<button class="tools-add" onclick="addTool('id_selectGlobalTools',true)">Add</button>
-					<div id="id_availGlobalTools" class="availtools-container">
-					</div>
-					<select id="id_selectLocalTools" name="instance_tools" class="tools-select">
-						<option value="windowTool" class="tools-option">Window</option>
-						<option value="profileTool" class="tools-option">Profile</option>
-					</select>
-					<button class="tools-add" onclick="addTool('id_selectLocalTools',false)">Add</button>
-					<div id="id_availLocalTools" class="availtools-container">
-					</div>
-				</div>
 			</div>
-		</div>
 	</div>
 
 	<template id="id_genericAnalysisTemplate">
 		<div class="analysiscanvas-container">
-			<canvas class="analysisCanvas" id="id_analysisCanvas"></canvas>
+			<canvas class="flexrow_container" id="id_analysisCanvas"></canvas>
 		</div>
-		<div class="analysisinfo-container">
+		<div class="analysisinfo-container width:0px height:0px">
 			Average:<span class="analysisText" id="id_analysisAvg"></span><br>
 			Minimum:<span class="analysisText" id="id_analysisMin"></span><br>
 			Maximum:<span class="analysisText" id="id_analysisMax"></span><br>
 		</div>
 	</template>
+
 	<template id="id_fileInstanceTemplate">
-		<div id="id_fileInstance" class="fileinstance-container unselected">
-			<img id="id_instanceImage" class="fileinstance-image"></img>
-			<div class="fileinstance-controls">
-				<input type='text' id="id_instanceName" class="fileinstance-name">
-				<div id="id_instanceRename" class="fileinstance-button hover-green">
+		<div id="id_fileInstance" 
+				class="flexrow_container flexele_fixed hover-light"
+				style="width:100%; height:25%; padding:10px;">
+
+			<img id="id_instanceImage" 
+					class="flexele_fixed"
+					style="width:40%; height:100%; object-fit: contain; object-position: center;">
+			</img>
+
+			<div class="flexele_both flexrow_container"
+					style="width:60%; flex-wrap: wrap; gap:16px;">
+				<input type='text' id="id_instanceName" 
+						class="appinput bgdark"
+						style="width:100%; height:min-content; margin:0 auto;">
+				<div id="id_instanceRename" 
+						class="appbtn_circle bgdark">
 					💾
 				</div>
-				<div id="id_instanceDelete" class="fileinstance-button hover-red">
+				<div id="id_instanceDelete" 
+						class="appbtn_circle bgdark">
 					🗑️
 				</div>
-				<div id="id_Btn3" class="fileinstance-button hover-red"></div>
+				<div id="id_Btn3" 
+						class="appbtn_circle bgdark">
+					🗑️
+				</div>
 			</div>
 		</div>
 	</template>
+
 	<template id="id_toolInstanceTemplate">
-		<div id="id_fileInstance" class="fileinstance-container unselected">
-			<img id="id_instanceImage" class="fileinstance-image"></img>
-			<div class="fileinstance-controls">
-				<input type='text' id="id_instanceName" class="fileinstance-name">
-				<div id="id_instanceScope" class="fileinstance-button hover-green">
-					📝
-				</div>
-				<div id="id_instanceDelete" class="fileinstance-button hover-red">
-					🗑️
-				</div>
-				<div id="id_instanceSelect" class="fileinstance-button hover-red"></div>
+		<div id="id_fileInstance" 
+				class="flexrow_container  flexlist_item"
+				style="width:100%; height:min-content; gap:4px;">
+			<input type='text' id="id_instanceName" 
+					class="appinput bgdark flexele_grow"
+					style="height:100%; margin:0 auto;">
+			<div id="id_instanceScope" 
+					class="flexele_fixed appbtn_circle hover-green">
+				📝
+			</div>
+			<div id="id_instanceDelete" 
+					class="flexele_fixed appbtn_circle hover-red">
+				🗑️
+			</div>
+			<div id="id_instanceSave" 
+					class="flexele_fixed appbtn_circle hover-red">
+				💾
 			</div>
 		</div>
 	</template>

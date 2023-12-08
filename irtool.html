@@ -167,7 +167,7 @@
 		top:0;
 		left:0;
 		width: 100%;
-		height: 100%;
+		height: 90%;
 	}
 	.hover-red:hover {
 		background-color: rgba(95,25,35,0.5);
@@ -249,12 +249,12 @@ class EventEmitter {
 				this.events[event].push(listener);
 		}
 	}
-  removeEventListener(event, listener) {
-    if (!this.events[event]) {
-        return; // No such event registered
-    }
-    this.events[event] = this.events[event].filter(cb => cb !== listener);
-  }
+	removeEventListener(event, listener) {
+		if (!this.events[event]) {
+				return; // No such event registered
+		}
+		this.events[event] = this.events[event].filter(cb => cb !== listener);
+	}
 	emit(type, event) {
 		if (this.events[type]) {
 			this.events[type].forEach(listener => {
@@ -1696,16 +1696,10 @@ class ThermalArrayModel extends EventEmitter{
 	getThermalPreview() {
 		return this.thermalFileModel.dataUrl;
 	}
-	parseFile(irFile) {
-		return new Promise((resolve, reject) => {
-			this.thermalFileModel.loadFile(irFile).then(() => {
-				this.createThermalArray();
-				this.name=this.thermalFileModel.fileName;
-				resolve();
-			}).catch((error) => {
-				reject(new Error(error));
-			});
-		});
+	async parseFile(irFile) {
+		await this.thermalFileModel.loadFile(irFile);
+		this.createThermalArray();
+		this.name=this.thermalFileModel.fileName;
 	}
 	activateColorPalette(colorPaletteModel) {
 		this.activeColorPalette=colorPaletteModel;
@@ -1760,47 +1754,50 @@ class ThermalFileModel extends EventEmitter{
 		this.recordsFLIR={};
 		this.dataFLIR={};
 	}
-	loadFile(irFile) {
+	async loadFile(irFile) {
+		await this.fileToBytes(irFile);
+		this.findSegments();
+		this.extractFLIRSegments();
+		this.processFLIRHeader();
+		this.processFLIRRecords();
+		await this.processRawData();
+		this.processCameraData();
+		await this.fileToPreview(irFile);
+	}
+	fileToBytes(irFile) {
 		return new Promise((resolve, reject) => {
 			let byteArrayReader = new FileReader();
 			byteArrayReader.onloadend = () => {
 				if (byteArrayReader.result) {
 					this.byteArray = new Uint8Array(byteArrayReader.result);
-					this.parseFile();
-					let dataUrlReader = new FileReader();
-
-					dataUrlReader.onloadend = () => {
-						if (dataUrlReader.result) {
-							this.dataUrl = dataUrlReader.result;
-							this.fileName = irFile.name;
-							resolve();
-						}
-					};
-					dataUrlReader.onerror = (error) => {
-						reject(new Error(error));
-					}
-					dataUrlReader.readAsDataURL(irFile);
+					resolve();
+				} else {
+					reject(new Error("Couldn't load file"));
 				}
-			};
+			}
 			byteArrayReader.onerror = (error) => {
 				reject(new Error(error));
 			}
 			byteArrayReader.readAsArrayBuffer(irFile);
 		});
 	}
-	parseFile() {
-		console.log("ThermalFileModel: find segments");
-		this.findSegments();
-		console.log("ThermalFileModel: extract FLIR segments");
-		this.extractFLIRSegments();
-		console.log("ThermalFileModel: process FLIR header");
-		this.processFLIRHeader();
-		console.log("ThermalFileModel: process FLIR records");
-		this.processFLIRRecords();
-		console.log("ThermalFileModel: process Raw Data");
-		this.processRawData();
-		console.log("ThermalFileModel: process Camera Data");
-		this.processCameraData();
+	fileToPreview(irFile) {
+		return new Promise((resolve, reject) => {
+			let dataUrlReader = new FileReader();
+			dataUrlReader.onloadend = () => {
+				if (dataUrlReader.result) {
+					this.dataUrl = dataUrlReader.result;
+					this.fileName = irFile.name;
+					resolve();
+				} else {
+					reject(new Error("Couldn't generate preview"));
+				}
+			}
+			dataUrlReader.onerror = (error) => {
+				reject(new Error(error));
+			}
+			dataUrlReader.readAsDataURL(irFile);
+		});
 	}
 	findSegments() {
 		let i = 0;
@@ -1937,29 +1934,81 @@ class ThermalFileModel extends EventEmitter{
 			}
 		}
 	}
-	processRawData()
+	async processRawData()
 	{
 		if(!this.recordsFLIR.hasOwnProperty(0x01)) {
-			throw "FLIR records missing key for raw data";
+			throw new Error("FLIR records missing key for raw data");
 		}
 		let reverse=false;
 		let record=this.recordsFLIR[0x01];
 		this.dataFLIR["rawData"]={};
 		let raw_data={};
 		raw_data['ByteOrder'] = 
-		get16u(this.bytesFLIR, record['RecordOffset']+0x00);
+				get16u(this.bytesFLIR, record['RecordOffset']+0x00);
 		if(raw_data['ByteOrder']>0x0100) {
 			reverse=true;
 		}
 		raw_data['ByteOrder'] = 
-		get16u(this.bytesFLIR, record['RecordOffset']+0x00, reverse);
+				get16u(this.bytesFLIR, record['RecordOffset']+0x00, reverse);
 		raw_data['ImageWidth'] = 
-		get16u(this.bytesFLIR, record['RecordOffset']+0x02, reverse);
+				get16u(this.bytesFLIR, record['RecordOffset']+0x02, reverse);
 		raw_data['ImageHeight'] = 
-		get16u(this.bytesFLIR, record['RecordOffset']+0x04, reverse);
-		raw_data['ThermalImage'] = 
-		get16u_array(this.bytesFLIR, record['RecordOffset']+0x1E+2, 
-				raw_data['ImageWidth']*raw_data['ImageHeight'], reverse)
+				get16u(this.bytesFLIR, record['RecordOffset']+0x04, reverse);
+		//Find the flir record type
+		let record_byte = this.bytesFLIR[record['RecordOffset']+32];
+		//Find assumed size of the thermal image
+		let irarray_size = (raw_data['ImageWidth'] * raw_data['ImageHeight'])*2;
+
+		if(record['RecordLength']-32 == irarray_size) {
+			//Raw 16U array type
+			raw_data['ThermalImage'] = 
+					get16u_array(this.bytesFLIR, record['RecordOffset']+32, 
+							raw_data['ImageWidth']*raw_data['ImageHeight'], reverse)
+		} else if(record_byte == 137) {
+			//PNG array type, this could get tricky
+			let png_array = this.bytesFLIR.slice(record['RecordOffset']+32,
+					record['RecordOffset']+record['RecordLength']);
+			//PNG type is 16bit grayscale, so cannot be rendered normally
+			//Instead of manually writing a PNG decoder, lets be more clever
+			//Edit the PNG header too..
+			//Double the image width
+
+			//let png_width = raw_data['ImageWidth']*2;
+			let png_width = 320
+			png_array[18]=png_width>>8;
+			png_array[19]=png_width&0xFF;
+			//Change the bit depth to 8
+			png_array[24]=8;
+			png_array[25]=4;
+			//recompute the header crc
+			let new_ihdr_crc_chunk=png_array.slice(12,12+4+13);
+			let new_crc = crc32(new_ihdr_crc_chunk);
+			png_array[29]=new_crc[0];
+			png_array[30]=new_crc[1];
+			png_array[31]=new_crc[2];
+			png_array[32]=new_crc[3];
+			//Now convert the edited PNG bytes into an image
+			//Then render the image
+			//then extract the pixels
+			//Then
+			let blob = new Blob([png_array], { type: 'image/png' });
+			let url = URL.createObjectURL(blob);
+			//Render this image
+			let a = document.createElement('a');
+			a.href = url;
+			a.download = 'image.png';
+			a.click();
+			let blob_pixels = await this.blobToPixels(blob);
+			console.log(blob_pixels);
+			raw_data['ThermalImage'] = this.pixelsToUint16(blob_pixels);
+			console.log(raw_data['ThermalImage']);
+			//convertBlobToUint16(blob, (uint16Array) => {
+			//	raw_data['ThermalImage']=uint16Array;
+			//	console.log(raw_data['ThermalImage']);
+			//});
+			//4213784308
+			//URL.revokeObjectURL(url);
+		}
 		this.dataFLIR["rawData"] = raw_data;
 	}
 	processCameraData()
@@ -2054,6 +2103,53 @@ class ThermalFileModel extends EventEmitter{
 		get16u(this.bytesFLIR, record['RecordOffset']+0x310, reverse);
 		this.dataFLIR["cameraData"] = camera_data;
 	}
+
+	blobToPixels(blob) {
+		return new Promise((resolve, reject) => {
+			let blobReader = new FileReader();
+			blobReader.onloadend = () => {
+					let img = new Image();
+					img.onload = () => {
+							let canvas = document.createElement('canvas');
+							let ctx = canvas.getContext('2d');
+							canvas.width = img.width;
+							canvas.height = img.height;
+							ctx.drawImage(img, 0, 0);
+							let imageData = ctx.getImageData(0, 0, img.width, img.height);
+							let data = imageData.data;
+							resolve(data);
+					};
+					img.src = blobReader.result;
+			};
+			blobReader.readAsDataURL(blob);
+		});
+	}
+
+	pixelsToUint16(pixels) {
+		let array_16u=[];
+		for(let i=0; i<pixels.length; i=i+4) {
+			let high_byte = pixels[i+3];
+			let low_byte = pixels[i];
+			array_16u.push(low_byte + (high_byte<<8));
+		}
+		return array_16u;
+	}
+}
+
+
+
+function crc32(data) {
+	let crc = 0xffffffff;
+	for (let i = 0; i < data.length; i++) {
+		crc = crcTable[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+	}
+	let crc_unsigned = (crc ^ 0xffffffff) >>> 0; // Convert to unsigned
+	return new Uint8Array([
+		(crc_unsigned >> 24) & 0xff,
+		(crc_unsigned >> 16) & 0xff,
+		(crc_unsigned >> 8) & 0xff,
+		crc_unsigned & 0xff
+	]);
 }
 
 function getSubArray(array, x0, x1, y0, y1) {
@@ -2076,47 +2172,47 @@ function getSubArray(array, x0, x1, y0, y1) {
 	return subArray;
 }
 function getLineArray(array, x0, x1, y0, y1) {
-		let points = [];
-		
-		let dx = Math.abs(x1 - x0);
-		let dy = Math.abs(y1 - y0);
-		
-		let sx = (x0 < x1) ? 1 : -1;
-		let sy = (y0 < y1) ? 1 : -1;
+	let points = [];
+	
+	let dx = Math.abs(x1 - x0);
+	let dy = Math.abs(y1 - y0);
+	
+	let sx = (x0 < x1) ? 1 : -1;
+	let sy = (y0 < y1) ? 1 : -1;
 
-		let err = dx - dy;
+	let err = dx - dy;
 
-		while (true) {
-				// Put the point into the array
-				if (array[y0] && array[y0][x0] !== undefined) {
-						points.push({x:x0, y:y0, t:array[y0][x0]});
-				}
+	while (true) {
+			// Put the point into the array
+			if (array[y0] && array[y0][x0] !== undefined) {
+					points.push({x:x0, y:y0, t:array[y0][x0]});
+			}
 
-				if ((x0 === x1) && (y0 === y1)) break;
-				let e2 = 2 * err;
+			if ((x0 === x1) && (y0 === y1)) break;
+			let e2 = 2 * err;
 
-				// EITHER move horizontally, OR move vertically, OR move in both directions
-				if (e2 > -dy) { err -= dy; x0 += sx; }
-				if (e2 < dx) { err += dx; y0 += sy; }
-		}
+			// EITHER move horizontally, OR move vertically, OR move in both directions
+			if (e2 > -dy) { err -= dy; x0 += sx; }
+			if (e2 < dx) { err += dx; y0 += sy; }
+	}
 
-		return points;
+	return points;
 }
 function get32float(array, offset, reverse=false) {
-		const buffer = new ArrayBuffer(8);
-		const view = new DataView(buffer);
-		if(reverse) {
-			view.setUint8(3,array[offset+0]);
-			view.setUint8(2,array[offset+1]);
-			view.setUint8(1,array[offset+2]);
-			view.setUint8(0,array[offset+3]);
-		} else {
-			view.setUint8(0,array[offset]);
-			view.setUint8(1,array[offset+1]);
-			view.setUint8(2,array[offset+2]);
-			view.setUint8(3,array[offset+3]);
-		}    
-		return view.getFloat32(0);
+	const buffer = new ArrayBuffer(8);
+	const view = new DataView(buffer);
+	if(reverse) {
+		view.setUint8(3,array[offset+0]);
+		view.setUint8(2,array[offset+1]);
+		view.setUint8(1,array[offset+2]);
+		view.setUint8(0,array[offset+3]);
+	} else {
+		view.setUint8(0,array[offset]);
+		view.setUint8(1,array[offset+1]);
+		view.setUint8(2,array[offset+2]);
+		view.setUint8(3,array[offset+3]);
+	}    
+	return view.getFloat32(0);
 }
 function get32u(array, offset, reverse=false) {
 	if(reverse) {
@@ -2376,6 +2472,15 @@ class ViridisPalette2 extends ColorPaletteModel{
 	const g_AnalysisGraph_Font = "Arial";
 	const g_AnalysisGraph_FontColor = 'rgba(192,190,190)';
 	const g_AnalysisGraph_AxisColor = 'rgba(192,190,190)';
+
+	const crcTable = new Uint32Array(256);
+	for (let n = 0; n < 256; n++) {
+			let c = n;
+			for (let k = 0; k < 8; k++) {
+					c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+			}
+			crcTable[n] = c;
+	}
 
 	function startup() {
 		console.log("Main: startup")

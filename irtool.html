@@ -145,7 +145,7 @@
 	}
 	.appinput {
 		height:min-content;
-		width:min-content;
+		min-width: 50%;
 		padding: 8px;
 		color:rgba(192,190,190);
 		border: none;
@@ -154,12 +154,10 @@
 	}
 
 	.analysisinfo-container {
-		padding: 10px;
 		width: 25%;
 		height: 100%;
 	}
 	.analysiscanvas-container {
-		padding: 10px;
 		width: 75%;
 		height: 100%;
 	}
@@ -282,6 +280,7 @@ class FileInstanceView extends EventEmitter{
 			const fileInstanceElement = template.content.cloneNode(true).firstElementChild;
 			this.fileList.appendChild(fileInstanceElement)
 			this.elementDiv = fileInstanceElement;
+			this.elementDiv.addEventListener('click', this.select);
 			this.elementImage = fileInstanceElement.querySelector("#id_instanceImage");
 			this.elementImage.addEventListener('click', this.select);
 			this.elementImage.src = this.thermalArray.getThermalPreview();
@@ -295,6 +294,7 @@ class FileInstanceView extends EventEmitter{
 	}
 	removeElements() {
 		if(this.rendered) {
+			this.elementDiv.removeEventListener('click', this.select);
 			this.elementImage.removeEventListener('click', this.select);
 			this.elementName.removeEventListener('change', this.rename);
 			this.btnDelete.removeEventListener('click', this.delete);
@@ -304,8 +304,10 @@ class FileInstanceView extends EventEmitter{
 	}
 	setHighlight(highlight=false) {
 		if(highlight) {
+			this.elementDiv.classList.remove('hover-light');
 			this.elementDiv.classList.add('flexlist_selected');
 		} else {
+			this.elementDiv.classList.add('hover-light');
 			this.elementDiv.classList.remove('flexlist_selected');
 		}
 	}
@@ -316,7 +318,10 @@ class FileInstanceView extends EventEmitter{
 		this.emit("delete",{instance:this});
 	}
 	select = (event) => {
-		this.emit("select",{instance:this});
+				console.log(event);
+		if(event.target == event.currentTarget) {
+			this.emit("select",{instance:this});
+		}
 	}
 }
 
@@ -337,6 +342,7 @@ class ToolInstanceView extends EventEmitter{
 			const toolInstanceElement = template.content.cloneNode(true).firstElementChild;
 			this.toolList.appendChild(toolInstanceElement)
 			this.elementDiv = toolInstanceElement;
+			this.elementDiv.addEventListener('click', this.select);
 			this.elementName = toolInstanceElement.querySelector("#id_instanceName");
 			this.elementName.value = this.toolModel.name;
 			this.elementName.addEventListener('change', this.rename);
@@ -346,11 +352,13 @@ class ToolInstanceView extends EventEmitter{
 			this.btnScope.addEventListener('click', this.scope);
 			this.btnSelect = toolInstanceElement.querySelector("#id_instanceSave");
 			this.btnSelect.addEventListener('click', this.select);
+
 			this.rendered = true;
 		}
 	}
 	removeElements() {
 		if(this.rendered){
+			this.elementDiv.removeEventListener('click', this.select);
 			this.elementName.removeEventListener('change', this.rename);
 			this.btnDelete.removeEventListener('click', this.delete);
 			this.btnSelect.removeEventListener('click', this.select);
@@ -379,7 +387,10 @@ class ToolInstanceView extends EventEmitter{
 		this.emit("delete",{instance:this});
 	}
 	select = (event) =>  {
-		this.emit("select",{instance:this});
+		console.log(event);
+		if(event.target == event.currentTarget) {
+			this.emit("select",{instance:this});
+		}
 	}
 	scope = (event) =>  {
 		this.emit("scope",{instance:this});
@@ -1338,10 +1349,10 @@ class AnalysisView extends EventEmitter{
 	}
 	divHeight() {
 		return this.div.offsetHeight;
-	}
+	} 
 	resizeUpdate() {
-		this.canvas.width = this.canvas.parentElement.clientWidth;
-		this.canvas.height = this.canvas.parentElement.clientHeight;
+		this.canvas.width = this.canvas.offsetWidth;
+		this.canvas.height = this.canvas.offsetHeight;
 		this.drawCanvas.width = this.canvas.width;
 		this.drawCanvas.height = this.canvas.height;
 		this.colorCanvas.width = this.canvas.width;
@@ -1439,7 +1450,7 @@ class AnalysisView extends EventEmitter{
 		canvasCtx.fillText(yMaxLabel.label,0,y1+labelHeight);
 		//Draw the x ticks/labels
 		for(let i=1; i<xTicks+1; i++) {
-			const tickLoc = (i*xTickLen)+x0;
+			const tickLoc = (i*xTickLen)+x0-(labelWidth/2);
 			const tickLabel = this.numberToFixedWidthString((xTickSize*i)+xMin);
 			canvasCtx.fillText(tickLabel.label,tickLoc,canvasHeight);
 		}
@@ -1530,7 +1541,7 @@ class AnalysisView extends EventEmitter{
 			const binHeight = Math.floor(histBins[i].h*binYScale);
 			//canvasCtx.fillStyle = histBins[i].color;
 			//draw the bin with 2-pixel gap between bins
-			drawCtx.fillRect(binX0, binY0-binHeight, binWidth-2, binHeight);
+			drawCtx.fillRect(binX0, binY0-binHeight, binWidth-2, Math.max(binHeight-2,0));
 		}
 		//copy drawing over to viewable canvas
 		colorCtx.globalCompositeOperation = 'destination-in';
@@ -1718,13 +1729,13 @@ class ThermalArrayModel extends EventEmitter{
 		}
 		this.arrayRendered=false;
 		const e = Math.E;
-			const R1 = cameraData[ 'PlanckR1'];
-			const R2 = cameraData[ 'PlanckR2'];
-			const B = cameraData[ 'PlanckB'];
-			const F = cameraData[ 'PlanckF'];
-			const O = cameraData[ 'PlanckO'];
-			const T_refl = cameraData[ 'ReflectedApparentTemperature'];
-			const Emissivity = cameraData[ 'Emissivity'];
+		const R1 = cameraData[ 'PlanckR1'];
+		const R2 = cameraData[ 'PlanckR2'];
+		const B = cameraData[ 'PlanckB'];
+		const F = cameraData[ 'PlanckF'];
+		const O = cameraData[ 'PlanckO'];
+		const T_refl = cameraData[ 'ReflectedApparentTemperature'];
+		const Emissivity = cameraData[ 'Emissivity'];
 
 		for (let h=0; h<rawData['ImageHeight']; h++) {
 			let row=[];
@@ -1990,18 +2001,11 @@ class ThermalFileModel extends EventEmitter{
 			//Now convert the edited PNG bytes into an image
 			//Then render the image
 			//then extract the pixels
-			//Then
 			let blob = new Blob([png_array], { type: 'image/png' });
 			let url = URL.createObjectURL(blob);
-			//Render this image
-			let a = document.createElement('a');
-			a.href = url;
-			a.download = 'image.png';
-			a.click();
 			let blob_pixels = await this.blobToPixels(blob);
-			console.log(blob_pixels);
 			raw_data['ThermalImage'] = this.pixelsToUint16(blob_pixels);
-			console.log(raw_data['ThermalImage']);
+			//console.log(raw_data['ThermalImage']);
 			//convertBlobToUint16(blob, (uint16Array) => {
 			//	raw_data['ThermalImage']=uint16Array;
 			//	console.log(raw_data['ThermalImage']);
@@ -2701,13 +2705,19 @@ class ViridisPalette2 extends ColorPaletteModel{
 	</div>
 
 	<template id="id_genericAnalysisTemplate">
-		<div class="analysiscanvas-container">
-			<canvas class="flexrow_container" id="id_analysisCanvas"></canvas>
-		</div>
-		<div class="analysisinfo-container width:0px height:0px">
-			Average:<span class="analysisText" id="id_analysisAvg"></span><br>
-			Minimum:<span class="analysisText" id="id_analysisMin"></span><br>
-			Maximum:<span class="analysisText" id="id_analysisMax"></span><br>
+		<div class="flexrow_container"
+			style="padding:10px; width:100%; height:100%;">
+			<div class="analysiscanvas-container bgdark"
+				style="padding:5px">
+				<canvas class="flexrow_container" id="id_analysisCanvas"
+				style="width:100%; height:100%;"></canvas>
+			</div>
+			<div class="analysisinfo-container"
+				style="padding:10px;">
+				Average:<span class="analysisText" id="id_analysisAvg"></span><br>
+				Minimum:<span class="analysisText" id="id_analysisMin"></span><br>
+				Maximum:<span class="analysisText" id="id_analysisMax"></span><br>
+			</div>
 		</div>
 	</template>
 
@@ -2747,7 +2757,7 @@ class ViridisPalette2 extends ColorPaletteModel{
 				class="flexrow_container  flexlist_item"
 				style="width:100%; height:min-content; gap:4px;">
 			<input type='text' id="id_instanceName" 
-					class="appinput bgdark flexele_grow"
+					class="appinput bgdark flexele_shrink"
 					style="height:100%; margin:0 auto;">
 			<div id="id_instanceScope" 
 					class="flexele_fixed appbtn_circle hover-green">
